@@ -1,0 +1,8 @@
+.venv/
+.DS_Store
+
+.python-version
+__pycache__/
+.mypy_cache/
+
+poetry.lock
