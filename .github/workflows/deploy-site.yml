@@ -41,7 +41,8 @@ jobs:
         run: poetry install
 
       - name: Build docs with MkDocs
-        run: poetry run mkdocs build --config-file docs/mkdocs.yml
+        run: poetry run mkdocs build
+        #run: poetry run mkdocs build --config-file docs/mkdocs.yml
 
       - name: Build And Deploy
         id: builddeploy
@@ -54,7 +55,7 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "/" # App source code path
           api_location: "/api" # Api source code path - optional
-          output_location: "/docs/build" # Built app content directory - optional
+          output_location: "/build" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
