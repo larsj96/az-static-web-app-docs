@@ -95,8 +95,9 @@ plugins:
 # Main navigation menu, edit to create your sub menu; retain main menu.
 nav:
   - Home:             README.md
-  - Chapter 1:
-    - Foobar:         chapter_1/foobar.md
+  - Terraform:
+    - Fortigate:         Terraform/fortigate.md
+    - Proxmox Deploy ubuntu cloud images with cloudinit:           Terraform/proxmox_ubuntu.md
   - Chapter 2:
     - Hello World:    chapter_2/hello_world.md
   - Get Started:
