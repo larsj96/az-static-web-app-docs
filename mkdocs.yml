@@ -12,8 +12,8 @@ edit_uri:  'edit/main/docs/source/equinor-example'
 
 
 # Source and build destination
-docs_dir: 'source/equinor-example'
-site_dir: 'build/equinor-example'
+docs_dir: 'docs'
+site_dir: 'build'
 
 # Copyright, do not edit
 copyright: 'Copyright &copy; 2024 Lars'
@@ -96,10 +96,9 @@ plugins:
 nav:
   - Home:             README.md
   - Terraform:
-    - Fortigate:         Terraform/fortigate.md
+    - Fortigate:         source/Terraform/fortigate.md
     - Proxmox Deploy ubuntu cloud images with cloudinit:           Terraform/proxmox_ubuntu.md
-  - Chapter 2:
-    - Hello World:    chapter_2/hello_world.md
+
   - Get Started:
     - Overview:       get-started/overview.md
     - Example:        get-started/example.md
