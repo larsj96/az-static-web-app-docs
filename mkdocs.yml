@@ -32,16 +32,13 @@ theme:
   features:
     - navigation.instant
     - navigation.tabs
-  logo: stylesheets/Equinor_Symbol_Favicon_RED_64x64px.png
-  favicon: stylesheets/Equinor_Symbol_Favicon_RED_32x32px.png
   icon:
     repo: fontawesome/brands/github
 extra:
   social:
     - icon:  fontawesome/brands/github
       link:  https://github.com/equinor/az-static-web-app-docs-template
-    - icon:  fontawesome/brands/slack
-      link:  https://equinor.slack.com
+
 
 # Extensions, do not edit
 markdown_extensions:
@@ -96,9 +93,5 @@ plugins:
 nav:
   - Home:             README.md
   - Terraform:
-    - Fortigate:         source/Terraform/fortigate.md
-    - Proxmox Deploy ubuntu cloud images with cloudinit:           Terraform/proxmox_ubuntu.md
-
-  - Get Started:
-    - Overview:       get-started/overview.md
-    - Example:        get-started/example.md
+    - Fortigate create vlans with automatically CIDR calculation:         source/Terraform/fortigate.md
+    - Proxmox Deploy ubuntu cloud images with cloudinit:           source/Terraform/proxmox_ubuntu.md
