@@ -74,10 +74,10 @@ resource "fortios_system_interface" "vlan_cidr_calc" {
   device_identification = "enable"
 }
 ```
-![Fortigate Picture ](Fortigate_vlans.png "Vlans in fortigate created by the terraform code")
+![Fortigate Picture ](Fortigate_vlans.png "VLANS in Fortigate created by the terraform code above")
 
 ## Terraform code explanation
-This Terraform code dynamically calculates and assigns CIDR blocks and VLAN IDs for different regions and subnets, specifically targeting the FortiGate firewall interfaces. Let's break down what it does:
+This Terraform code dynamically calculates and assigns CIDR blocks and VLAN IDs for different regions and subnets, specifically targeting the FortiGate firewall interface "Switches". Let's break down what it does:
 
 1. **Locals Block:**
    - It defines local variables to organize regions and subnets.
@@ -96,7 +96,7 @@ This Terraform code dynamically calculates and assigns CIDR blocks and VLAN IDs 
    - It also assigns a VLAN ID for each subnet.
 
 4. **Resource "fortios_system_interface":**
-   - It creates VLAN interfaces for the FortiGate firewall.
+   - It creates VLAN interfaces for the FortiGate firewall on 2 interfaces.
    - It iterates over each subnet block specifically for the "fortigate_onprem" region.
    - It assigns an IP address and VLAN ID based on the calculated CIDR blocks and VLAN IDs.
    - Other attributes like interface type, mode, description, etc., are also configured.

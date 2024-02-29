@@ -8,7 +8,7 @@ site_url:         'https://docs.lanilsen.xyz/'
 # Repository, edit to point to appropriate repo
 repo_name: 'larsj96/az-static-web-app-docs'
 repo_url:  'https://github.com/larsj96/az-static-web-app-docs'
-edit_uri:  'edit/main/docs/source/equinor-example'
+edit_uri:  'edit/main/docs/'
 
 
 # Source and build destination
@@ -37,7 +37,7 @@ theme:
 extra:
   social:
     - icon:  fontawesome/brands/github
-      link:  https://github.com/equinor/az-static-web-app-docs-template
+      link:  https://github.com/larsj96/
 
 
 # Extensions, do not edit
@@ -102,9 +102,16 @@ nav:
   - Terraform:
       - Fortigate create vlans with automatically CIDR calculation: source/Terraform/fortigate.md
       - Proxmox Deploy ubuntu cloud images with cloudinit: source/Terraform/proxmox_ubuntu.md
+      - Create DNS records in cloudfare dynamicly & automatically from fortigate: source/Terraform/cloudfare.md
   - Docker:
-      - placeholder: source/404/placeholder.md
+      - Docker-Compose: source/Docker/docker-compose.md
   - Powershell:
       - PFsense Rest Api Powershell Module: source/Powershell/PFsenseModule.md
   - Packer:
       - VShere Windows CIS level 1: source/Packer/Vsphere_cis1.md
+  - Kubernetes:
+      - Fortigate And CNI: source/Kubernetes/Fortigate&CNI.md
+  - Homelab:
+      - Specs: source/Homelab/Specs.md
+  - About me:
+      - Information: source/About/information.md
