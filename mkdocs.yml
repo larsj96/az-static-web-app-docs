@@ -91,7 +91,20 @@ plugins:
 
 # Main navigation menu, edit to create your sub menu; retain main menu.
 nav:
-  - Home:             README.md
+  - Home: README.md
   - Terraform:
-    - Fortigate create vlans with automatically CIDR calculation:         source/Terraform/fortigate.md
-    - Proxmox Deploy ubuntu cloud images with cloudinit:           source/Terraform/proxmox_ubuntu.md
+      - Fortigate create vlans with automatically CIDR calculation: source/Terraform/fortigate.md
+      - Proxmox Deploy ubuntu cloud images with cloudinit: source/Terraform/proxmox_ubuntu.md
+  - Docker:
+      - placeholder : # Main navigation menu, edit to create your sub menu; retain main menu.
+nav:
+  - Home: README.md
+  - Terraform:
+      - Fortigate create vlans with automatically CIDR calculation: source/Terraform/fortigate.md
+      - Proxmox Deploy ubuntu cloud images with cloudinit: source/Terraform/proxmox_ubuntu.md
+  - Docker:
+      - placeholder: source/404/placeholder.md
+  - Powershell:
+      - PFsense Rest Api Powershell Module: source/Powershell/PFsenseModule.md
+  - Packer:
+      - VShere Windows CIS level 1: source/Packer/Vsphere_cis1.md

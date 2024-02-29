@@ -1,6 +1,7 @@
 
 
-Terraform fortigate example:
+
+## Terraform code block
 
 ```
 
@@ -75,6 +76,7 @@ resource "fortios_system_interface" "vlan_cidr_calc" {
 ```
 ![Fortigate Picture ](Fortigate_vlans.png "Vlans in fortigate created by the terraform code")
 
+## Terraform code explanation
 This Terraform code dynamically calculates and assigns CIDR blocks and VLAN IDs for different regions and subnets, specifically targeting the FortiGate firewall interfaces. Let's break down what it does:
 
 1. **Locals Block:**
@@ -106,5 +108,7 @@ In summary, this Terraform code dynamically calculates and assigns CIDR blocks a
 This Terraform code is designed to be cloud-agnostic, meaning it can be used across multiple cloud platforms such as Azure, AWS, OpenStack, and even VMware environments by configuring port groups. This flexibility enables consistent and scalable network configuration regardless of the underlying cloud infrastructure, ensuring seamless deployment and management across heterogeneous environments.
 
 
+## Link to Github repo:
+https://github.com/larsj96/terraform_fortigate
 
 
