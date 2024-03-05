@@ -32,4 +32,6 @@
 
 ### Other Equipment:
 - **Cooling:**
-  - Cloudline T6 exhaust fan for office room
+  - Cloudline T6 exhaust fan from the server rack to my office
+
+  ![Server room  ](serverroom.jpg "Homemade rack :)")
