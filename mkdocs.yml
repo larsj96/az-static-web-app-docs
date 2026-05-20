@@ -1,65 +1,39 @@
-# Project information, do not edit
-site_name:        'Docs lanilsen.xyz'
-site_description: 'Azure static web apps template'
-site_author:      'Lars Jørgen'
-site_url:         'https://docs.lanilsen.xyz/'
+site_name: "Lanilsen Homelab Docs"
+site_description: "Architecture, network, Terraform, Ansible, storage, and operations notes for the Mo i Rana homelab"
+site_author: "Lars Jørgen Nilsen"
+site_url: "https://docs.lanilsen.xyz/"
 
+repo_name: "larsj96/az-static-web-app-docs"
+repo_url: "https://github.com/larsj96/az-static-web-app-docs"
+edit_uri: "edit/main/docs/"
 
-# Repository, edit to point to appropriate repo
-repo_name: 'larsj96/az-static-web-app-docs'
-repo_url:  'https://github.com/larsj96/az-static-web-app-docs'
-edit_uri:  'edit/main/docs/'
-
-
-# Source and build destination
-docs_dir: 'docs'
-site_dir: 'build'
-
-# Copyright, do not edit
-copyright: 'Copyright &copy; 2024 Lars'
-
-# Configuration, do not edit
+docs_dir: "docs"
+site_dir: "build"
 use_directory_urls: true
+
 theme:
-  name: 'material'
-  language: 'en'
+  name: "material"
+  language: "en"
   palette:
-    primary: 'grey'
-    accent: 'pink'
-  font:
-    text: 'Roboto'
-    code: 'Roboto Mono'
+    primary: "grey"
+    accent: "blue"
   features:
     - navigation.instant
     - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
   icon:
     repo: fontawesome/brands/github
-extra:
-  social:
-    - icon:  fontawesome/brands/github
-      link:  https://github.com/larsj96/
 
-
-# Extensions, do not edit
 markdown_extensions:
-  - attr_list
   - admonition
-  - codehilite:
-      guess_lang: false
+  - attr_list
+  - tables
   - toc:
-      permalink: false
-  - pymdownx.arithmatex
-  - pymdownx.betterem:
-      smart_enable: all
-  - pymdownx.caret
-  - pymdownx.critic
+      permalink: true
   - pymdownx.details
-  - pymdownx.emoji:
-      emoji_generator: !!python/name:pymdownx.emoji.to_svg
-  - pymdownx.inlinehilite
-  - pymdownx.magiclink
-  - pymdownx.mark
-  - pymdownx.smartsymbols
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -67,51 +41,28 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_div_format
   - pymdownx.tasklist:
       custom_checkbox: true
-  - pymdownx.tilde
 
-
-# To add css
-extra_css:
-  - 'stylesheets/extra.css'
-
-# To support PyMdown
-extra_javascript:
-  - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML'
-
-# Enable search functionality
 plugins:
   - search:
       separator: '[\s]+'
       lang: en
-      prebuild_index: true
   - git-revision-date
-#  - macros
-# - markdownmermaid
   - mermaid2
 
-# Main navigation menu, edit to create your sub menu; retain main menu.
 nav:
   - Home: README.md
-  - Terraform:
-      - Fortigate create vlans with automatically CIDR calculation: source/Terraform/fortigate.md
-      - Proxmox Deploy ubuntu cloud images with cloudinit: source/Terraform/proxmox_ubuntu.md
-  - Docker:
-      - placeholder : # Main navigation menu, edit to create your sub menu; retain main menu.
-nav:
-  - Home: README.md
-  - Terraform:
-      - Fortigate create vlans with automatically CIDR calculation: source/Terraform/fortigate.md
-      - Proxmox Deploy ubuntu cloud images with cloudinit: source/Terraform/proxmox_ubuntu.md
-      - Create DNS records in cloudfare dynamicly & automatically from fortigate: source/Terraform/cloudfare.md
-  - Docker:
-      - Docker-Compose: source/Docker/docker-compose.md
-  - Powershell:
-      - PFsense Rest Api Powershell Module: source/Powershell/PFsenseModule.md
-  - Packer:
-      - VShere Windows CIS level 1: source/Packer/Vsphere_cis1.md
-  - Kubernetes:
-      - Fortigate And CNI: source/Kubernetes/Fortigate&CNI.md
-  - Homelab:
-      - Specs: source/Homelab/Specs.md
-  - About me:
-      - Information: source/About/information.md
+  - Architecture:
+      - Overview: architecture.md
+      - Network Model: network-model.md
+      - Storage Plan: storage-plan.md
+      - Proxmox And Ceph: proxmox-ceph-plan.md
+  - Infrastructure As Code:
+      - Operating Model: iac-operating-model.md
+      - Terraform State: terraform-cloud-state.md
+      - Repository Split: repo-split-plan.md
+      - Implementation Roadmap: implementation-roadmap.md
+  - Services:
+      - Self-Hosted Docs Platform: self-hosted-docs-platform.md
+      - Cloudflare Tunnel And Plex: cloudflare-tunnel-plex.md
+  - Operations:
+      - Frankfurt VPS Ops Hub: frankfurt-vps-ops-hub.md
