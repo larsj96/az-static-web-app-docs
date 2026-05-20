@@ -6,8 +6,8 @@ The homelab should use both Terraform and Ansible.
 
 - Proxmox VMs, templates, pools, tags, and cloud-init inputs
 - Fortigate/Palo Alto network objects, VLANs, policies, NAT, and VPN where providers are reliable
-- Cloudflare DNS, tunnels, and Access policy
-- Terraform Cloud workspaces and variable sets, if desired later
+- Cloudflare DNS, tunnels, Access applications, and identity providers
+- Remote state backend configuration per stack
 
 ## Ansible Owns
 
@@ -41,14 +41,23 @@ flowchart LR
 
 ## First Practical Target
 
-Use Terraform to create two Ubuntu VMs for the docs platform.
+The first practical target is complete:
 
-Then use Ansible to:
+```text
+Terraform created bastion01, mkdocs, docker1, and ubuntu-noble-test-01.
+Ansible deployed MkDocs/Nginx to mkdocs.
+Terraform published docs.lanilsen.com through Cloudflare Tunnel and Cloudflare Access.
+```
 
-- install Caddy or Nginx
-- deploy the static docs build
-- configure service health checks
-- prepare for internal VIP/load balancing
+The current docs flow is:
+
+```mermaid
+flowchart LR
+  tfp["Terraform Proxmox"] --> vm["mkdocs VM"]
+  ansible["Ansible from bastion01"] --> nginx["Nginx + MkDocs static site"]
+  tfcf["Terraform Cloudflare"] --> cf["DNS + Tunnel + Access"]
+  cf --> nginx
+```
 
 ## Proxmox Image Strategy
 
@@ -85,24 +94,52 @@ Ansible should handle iterative or application-specific state:
 
 ## Existing terraform-proxmox Repo Notes
 
-The old `larsj96/terraform-proxmox` repo was cloned on the Frankfurt VPS at:
+`larsj96/terraform-proxmox` is cloned on the Frankfurt VPS at:
 
 ```text
 /opt/homelab-ops/repos/terraform-proxmox
 ```
 
-Observed traits:
+Current stack:
 
-- Uses `bpg/proxmox` provider.
-- Already uses Ubuntu Jammy cloud image download.
-- Already uses Proxmox cloud-init snippets.
-- Has Terraform Cloud backend for organization `lanilsen`, workspace `proxmox_hjemmelabb`.
+```text
+proxmox-core/
+backend: Cloudflare R2
+provider: bpg/proxmox
+image: Ubuntu Noble cloud image
+primary node: hp1
+storage: nvme-local
+```
 
-Needed modernization before real apply:
+Important implementation notes:
 
-- Replace hardcoded endpoint `https://192.168.13.8:8006/` with variable-based `https://10.0.0.162:8006/`.
-- Configure provider API token via Terraform Cloud sensitive variables.
-- Remove inline default password behavior from cloud-init.
-- Move SSH keys into variables or a managed file instead of hardcoding long keys in Terraform.
-- Update Ubuntu image target to Noble unless a workload specifically needs Jammy.
-- Parameterize node placement instead of hardcoding all VMs to `hp1`.
+- Run Terraform from the VPS with Docker `--network host`.
+- Override Proxmox node SSH address for `hp1` to `10.0.0.162`.
+- Put provider tokens and SSH passwords in environment variables or ignored tfvars files.
+- Use cloud-init snippets for guest bootstrap.
+- Use Ansible for packages and service configuration after the VM exists.
+
+## Current Terraform Stacks
+
+| Stack | Repo/path | State key | Execution |
+| --- | --- | --- | --- |
+| Proxmox core | `terraform-proxmox/proxmox-core` | `terraform-proxmox/proxmox-core/terraform.tfstate` | VPS/workstation with Proxmox reachability |
+| Cloudflare docs | `terraform-cloudflare/docs-tunnel` | `terraform-cloudflare/docs-tunnel/terraform.tfstate` | VPS with Cloudflare/R2 env |
+| Fortigate | `terraform-fortigate` | Not migrated yet | Wait until ready |
+| Palo Alto | `terraform-palo` | Not migrated yet | Local/lab |
+
+## Current Ansible Roles
+
+| Role | Purpose |
+| --- | --- |
+| `mkdocs` | Install Nginx, build and publish docs from GitHub. |
+| `cloudflared` | Install connector service from Terraform tunnel token. |
+
+Run Ansible from `bastion01` because it has SSH access to service VMs:
+
+```bash
+ssh ubuntu@10.0.0.99
+cd ~/ansible-homelab
+git pull
+ansible-playbook playbooks/mkdocs.yml
+```

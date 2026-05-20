@@ -1,7 +1,7 @@
 site_name: "Lanilsen Homelab Docs"
 site_description: "Architecture, network, Terraform, Ansible, storage, and operations notes for the Mo i Rana homelab"
 site_author: "Lars Jørgen Nilsen"
-site_url: "https://docs.lanilsen.xyz/"
+site_url: "https://docs.lanilsen.com/"
 
 repo_name: "larsj96/az-static-web-app-docs"
 repo_url: "https://github.com/larsj96/az-static-web-app-docs"

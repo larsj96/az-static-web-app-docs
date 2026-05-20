@@ -15,6 +15,7 @@ VPS:
 - Terraform Cloud Agent Compose template at `/opt/homelab-ops/tfc-agent`
 - Local VPS notes at `/opt/homelab-ops/README.md`
 - Persistent homelab IPsec source route service: `homelab-ipsec-routes.service`
+- R2/Cloudflare env file at `/root/.config/homelab/cloudflare-r2.env`
 
 Terraform wrapper verification:
 
@@ -108,6 +109,84 @@ docker compose up -d
 ```
 
 Keep the token out of Git and paste it directly into `.env` on the VPS.
+
+## Terraform CLI Runs With R2 State
+
+The active CLI-driven stacks run from:
+
+```text
+/opt/homelab-ops/repos/terraform-proxmox/proxmox-core
+/opt/homelab-ops/repos/terraform-cloudflare/docs-tunnel
+```
+
+Credential source:
+
+```bash
+source /root/.config/homelab/cloudflare-r2.env
+```
+
+That file is sourced from `/root/.bashrc`, so new root shells should already have:
+
+```text
+CLOUDFLARE_API_TOKEN
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+R2_STATE_BUCKET
+```
+
+Do not copy the token into random shell history or repo files.
+
+## Cloudflare IPv4 Pinning
+
+The VPS has IPv6, and Cloudflare API calls may prefer it:
+
+```text
+2a02:4780:41:59ef::1
+```
+
+If a Cloudflare token is IP-restricted only to `72.61.95.150/32`, pin Docker Terraform runs to an IPv4 Cloudflare API address:
+
+```bash
+CF_API_IPV4=$(getent ahostsv4 api.cloudflare.com | awk 'NR==1{print $1}')
+docker run --rm --network host --add-host "api.cloudflare.com:$CF_API_IPV4" ...
+```
+
+Better long term: include both source IPs in the token condition:
+
+```text
+72.61.95.150/32
+2a02:4780:41:59ef::1/128
+```
+
+## Published Docs Operations
+
+Cloudflare resources are managed from:
+
+```bash
+cd /opt/homelab-ops/repos/terraform-cloudflare/docs-tunnel
+```
+
+The docs origin is configured from bastion:
+
+```bash
+ssh ubuntu@10.0.0.99
+cd ~/ansible-homelab
+git pull
+ansible-playbook playbooks/mkdocs.yml
+```
+
+Current public verification:
+
+```bash
+curl -I https://docs.lanilsen.com/
+```
+
+Expected unauthenticated result:
+
+```text
+HTTP/2 302
+location: https://lanilsen.cloudflareaccess.com/...
+```
 
 ## Important Boundary
 

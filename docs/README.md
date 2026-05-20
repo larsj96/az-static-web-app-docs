@@ -1,6 +1,6 @@
 # Homelab Blueprint
 
-This site captures the target architecture for the Mo i Rana homelab: Proxmox on HP DL380 Gen9 nodes, Cloudflare R2-backed Terraform state, Fortigate-managed networking, self-hosted documentation, and future Cloudflare/cloudflared public access.
+This site captures the current architecture for the Mo i Rana homelab: Proxmox on HP DL380 Gen9 nodes, Cloudflare R2-backed Terraform state, Fortigate-managed networking, self-hosted documentation, and Cloudflare Tunnel/Access for selected public services.
 
 Future Codex sessions should read `AGENTS.md` in the local Homelab workspace first for live VPS, IPsec, Terraform, and Proxmox management context.
 
@@ -11,7 +11,18 @@ Future Codex sessions should read `AGENTS.md` in the local Homelab workspace fir
 - Manage Proxmox, Fortigate/Palo Alto, Cloudflare, and application infrastructure with Terraform where practical.
 - Self-host the docs platform on Ubuntu VMs.
 - Prepare for Ceph/shared storage over a dedicated 10 Gbit network.
-- Expose selected public services later through Cloudflare Tunnel, starting with docs and revisiting Plex carefully.
+- Expose selected public services through Cloudflare Tunnel and protect admin/docs surfaces with Cloudflare Access.
+
+## Live Status
+
+| Area | Current state |
+| --- | --- |
+| Proxmox | HP cluster is healthy after removing `dell1`; Terraform-managed VMs run on `hp1` with `nvme-local` storage. |
+| Bastion | `bastion01` is live on VLAN 14 at `10.0.0.99` and is the Ansible control/jump host. |
+| Docs VM | `mkdocs` is live on VLAN 12 at `10.0.0.37`, built by Ansible from this repo. |
+| Public docs | `https://docs.lanilsen.com/` is published by Cloudflare Tunnel and protected by Cloudflare Access. |
+| Terraform state | Proxmox and Cloudflare docs stacks use Cloudflare R2 bucket `lanilsen-terraform-state`. |
+| Automation model | Terraform creates infrastructure; cloud-init bootstraps guests; Ansible configures services. |
 
 ## Key Decision
 

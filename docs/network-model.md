@@ -22,14 +22,25 @@
 
 ## Management Boundary
 
-The Proxmox management network should remain reachable only from trusted local/admin paths. Since `192.168.13.0/24` is intentionally not routed across the VPN, Terraform execution against Proxmox needs one of these:
+The old Proxmox management network should remain reachable only from trusted local/admin paths. Since `192.168.13.0/24` is intentionally not routed across the VPN, Terraform execution against Proxmox uses the routed VLAN 16 addresses instead.
+
+Current working path:
+
+```text
+VPS/OpenVPN source 10.8.0.1
+  -> IPsec to Fortigate
+  -> VLAN 16 10.0.0.160/27
+  -> hp1 10.0.0.162:8006
+```
+
+Terraform execution against Proxmox needs one of these:
 
 - Run Terraform locally while physically/logically on a network that can reach Proxmox management.
-- Run a Terraform Cloud Agent VM inside a trusted management or automation subnet with explicit firewall policy to Proxmox APIs.
-- Use the Frankfurt VPS agent only after VLAN 16 is routed over the IPsec/VPN path with narrow Fortigate policy.
+- Run from the Frankfurt VPS over VLAN 16 with narrow Fortigate policy.
+- Run a future self-hosted runner/agent inside a trusted automation subnet with explicit firewall policy to Proxmox APIs.
 - Add a temporary VPN route only during controlled maintenance windows, then remove it.
 
-The preferred long-term option is a Terraform Cloud Agent VM with narrow firewall rules.
+The preferred long-term option is still a narrow automation path, not broad management routing.
 
 ## VLAN 16 Proxmox Management Plan
 
@@ -114,6 +125,14 @@ Terraform-created service VMs on this VLAN:
 | `docker1` | `9030` | Docker Compose services host | 8 CPU, 32 GiB RAM, 500 GiB disk | `10.0.0.35` |
 
 Both were deployed with the workstation SSH key and the `ubuntu@bastion01` SSH key.
+
+Public docs traffic now follows:
+
+```text
+Internet client -> Cloudflare Access -> Cloudflare Tunnel -> mkdocs 10.0.0.37:80
+```
+
+No inbound Starlink/Fortigate port forward is required for docs.
 
 ## hp1 VLAN 16 Configuration
 

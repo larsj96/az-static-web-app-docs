@@ -2,13 +2,14 @@
 
 ## Current Proxmox Access
 
-Proxmox management is on NIC0:
+Proxmox has two relevant management paths:
 
-- `https://192.168.13.xxx:8006/`
-- 1 Gbit management network
-- Not reachable from VPN by design
+| Path | Purpose | Status |
+| --- | --- | --- |
+| `https://192.168.13.xxx:8006/` | Local fallback management on NIC0 | Not VPN-routed by design. |
+| `https://10.0.0.162:8006/` and peer VLAN 16 IPs | Routed Proxmox management for automation/admin | Working through Fortigate/IPsec with narrow policy. |
 
-That is a good security boundary. Keep it that way unless a specific automation host is granted access.
+Keep the fallback network private. Use VLAN 16 for deliberate automation paths.
 
 ## Cluster Plan
 
@@ -61,7 +62,14 @@ For Ceph bootstrap, document the manual/proxmox-native steps first. Add Terrafor
 
 ## Current State Update
 
-As of 2026-05-19, the HP node NVMes were wiped and rebuilt as local LVM-thin storage for immediate VM use:
+As of 2026-05-20/21:
+
+- `dell1` was removed from the production cluster and should stay out of quorum.
+- The HP cluster is healthy enough for Terraform-created VMs.
+- Terraform created `ubuntu-noble-test-01`, `bastion01`, `mkdocs`, and `docker1`.
+- Current VM disks use `nvme-local`.
+
+The HP node NVMes were wiped and rebuilt as local LVM-thin storage for immediate VM use:
 
 ```text
 storage ID: nvme-local

@@ -82,10 +82,12 @@ Potential future shape:
 
 ## Immediate Terraform Use
 
-Use `nvme-local` for first Terraform-created VMs:
+Use `nvme-local` for current Terraform-created VMs:
 
-- Ubuntu cloud image based template/test VM.
-- Docs platform VMs.
+- `ubuntu-noble-test-01`
+- `bastion01`
+- `mkdocs`
+- `docker1`
 - Any non-critical bootstrap services.
 
 Practical direction chosen at the end of this session:
@@ -95,7 +97,9 @@ Practical direction chosen at the end of this session:
 - Do not pause VM work waiting for Ceph.
 - Revisit the final Ceph split later, after network and SAS work is ready.
 
-Terraform/cloud-init still needs snippets-capable storage. Retrying this is a next step:
+Terraform/cloud-init uses snippets-capable storage through the current Proxmox configuration. If snippets storage needs to move later, use an explicit Terraform variable rather than assuming `local` supports snippets.
+
+Earlier attempt to add snippets content to `local`:
 
 ```bash
 pvesm set local --content backup,vztmpl,iso,import,snippets

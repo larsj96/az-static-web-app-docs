@@ -8,12 +8,13 @@ The homelab sits behind Starlink and CGNAT. External administrative access is an
 flowchart LR
   pc["Workstation / PC"] -->|OpenVPN| vps["Hostinger VPS\nFrankfurt\n72.61.95.150"]
   vps -->|IPsec| fortigate["Fortigate 500D\nMo i Rana"]
-  fortigate --> mgmt["Proxmox management\n192.168.13.0/24\nnot VPN-routed"]
+  fortigate --> mgmt["Proxmox management\nVLAN 16 / 10.0.0.160/27\nnarrowly routed"]
   fortigate --> vmnet["VM / service networks"]
   fortigate --> internet["Starlink Internet\nCGNAT"]
+  cf["Cloudflare"] -->|Tunnel + Access| docs["docs.lanilsen.com\nmkdocs 10.0.0.37"]
 ```
 
-The Proxmox management interface is on NIC0 at 1 Gbit. This network should stay restricted and should not be reachable from the VPN unless a deliberate break-glass route is added.
+The original Proxmox fallback management network is still on NIC0 at `192.168.13.0/24` and should stay private. Routed automation access now uses VLAN 16, `10.0.0.160/27`, with narrow firewall policy.
 
 ## Frankfurt VPS Role
 
@@ -29,20 +30,20 @@ Good roles for the VPS:
 
 Avoid turning the VPS into a broad management bridge. It should not automatically have access to every private management network just because it is convenient.
 
-For Terraform, the VPS is only a good runner if the exact target API is intentionally reachable over the VPN/IPsec path. Since Proxmox management on `192.168.13.0/24` is intentionally not reachable from VPN, the VPS should not run Proxmox Terraform unless that policy changes. A Terraform Cloud Agent inside the homelab is cleaner for private infrastructure.
+For Terraform, the VPS is a good runner only when the exact target API is intentionally reachable over the VPN/IPsec path. It can now reach Proxmox through VLAN 16 and can always reach Cloudflare public APIs. Keep the old `192.168.13.0/24` Proxmox fallback network out of broad VPN routing.
 
 ## Target Infrastructure
 
 | Layer | Target |
 | --- | --- |
-| State | Terraform Cloud remote state |
-| Execution | Local workstation first, Terraform Cloud Agent later |
+| State | Cloudflare R2 remote state, one key per repo/stack |
+| Execution | Workstation or Frankfurt VPS with Docker `--network host`; self-hosted runners later if useful |
 | Compute | 3 reliable Proxmox nodes on HP DL380 Gen9 |
 | Legacy compute | Dell R820 available only for non-critical/lab workloads |
 | Storage | Ceph over dedicated 10 Gbit RJ45 network later |
 | Firewall | Fortigate 500D managed with Terraform |
-| Public ingress | Cloudflare Tunnel for selected services |
-| Docs platform | Self-hosted highly available Ubuntu VM deployment |
+| Public ingress | Cloudflare Tunnel plus Cloudflare Access for selected services |
+| Docs platform | Self-hosted MkDocs on Ubuntu VM, exposed as `docs.lanilsen.com` |
 
 ## Server Inventory
 
@@ -55,7 +56,24 @@ For Terraform, the VPS is only a good runner if the exact target API is intentio
 ## Design Principles
 
 - Keep management, storage, and VM/service traffic separate.
-- Keep Terraform state centralized, but do not force Terraform execution into a network path that cannot reach private APIs.
+- Keep Terraform state centralized in R2, but do not force Terraform execution into a network path that cannot reach private APIs.
 - Use the Fortigate as the policy and routing boundary.
 - Keep Cloudflare Tunnel scoped to public applications, not management planes.
-- Make the docs platform a normal internal service first, then optionally publish it later.
+- Keep docs as a normal internal service first, then publish externally only through Cloudflare Tunnel and Access.
+
+## Live Service Path
+
+```mermaid
+flowchart LR
+  browser["Browser"] --> cfaccess["Cloudflare Access\nOTP allowlist"]
+  cfaccess --> cftunnel["Cloudflare Tunnel\nhomelab-docs"]
+  cftunnel --> mkdocs["mkdocs VM\n10.0.0.37:80"]
+  mkdocs --> nginx["Nginx static MkDocs site"]
+```
+
+Access is enabled for:
+
+```text
+larsj96@gmail.com
+jaguni@gmail.com
+```

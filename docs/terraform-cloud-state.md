@@ -24,12 +24,13 @@ Suggested state keys:
 terraform-proxmox/proxmox-core/terraform.tfstate
 terraform-fortigate/core/terraform.tfstate
 terraform-palo/core/terraform.tfstate
+terraform-cloudflare/docs-tunnel/terraform.tfstate
 terraform-cloudflare/dns/terraform.tfstate
 ```
 
 ## Migration Status
 
-Completed on `2026-05-20`:
+Completed Proxmox migration on `2026-05-20`:
 
 ```text
 bucket: lanilsen-terraform-state
@@ -51,6 +52,26 @@ proxmox_virtual_environment_vm.bastion01
 proxmox_virtual_environment_vm.docker1
 proxmox_virtual_environment_vm.mkdocs
 proxmox_virtual_environment_vm.ubuntu_test
+```
+
+Completed Cloudflare docs stack on `2026-05-20` and Access lock-down on `2026-05-21`:
+
+```text
+bucket: lanilsen-terraform-state
+state: terraform-cloudflare/docs-tunnel/terraform.tfstate
+execution host: Frankfurt VPS
+```
+
+Expected resources:
+
+```text
+random_id.tunnel_secret
+cloudflare_zero_trust_tunnel_cloudflared.docs
+cloudflare_zero_trust_tunnel_cloudflared_config.docs
+cloudflare_dns_record.docs
+cloudflare_zero_trust_access_application.docs
+cloudflare_zero_trust_access_identity_provider.onetimepin
+data.cloudflare_zero_trust_tunnel_cloudflared_token.docs
 ```
 
 ## Execution Constraint
@@ -89,10 +110,55 @@ The agent should have:
 | `terraform-proxmox/proxmox-core` | `terraform-proxmox` | Local/VPS/runner | Proxmox cluster, VMs, templates |
 | `terraform-fortigate/core` | firewall repo | Local/VPS/runner | Fortigate base config, VLANs, policy, NAT |
 | `homelab-palo-lab` | `terraform-palo` | Local only unless needed | Palo Alto lab/firewall migration work |
-| `terraform-cloudflare/dns` | `terraform-cloudflare` | Local/VPS/runner | DNS, tunnels, access policies |
-| `homelab-docs-platform` | future infra/app repo | Local/VPS/runner | Ubuntu VMs, docs deployment, load balancing |
+| `terraform-cloudflare/docs-tunnel` | `terraform_cloudfare` / local `terraform-cloudflare` | VPS | Docs DNS, tunnel, Access app, OTP IdP |
+| `terraform-cloudflare/dns` | `terraform_cloudfare` / local `terraform-cloudflare` | Local/VPS/runner | Future shared DNS records |
+| `homelab-docs-platform` | `terraform-proxmox` + `Ansible` + `terraform_cloudfare` | VPS/bastion | VM, docs deployment, public tunnel |
 
 Cloudflare can run from almost anywhere because the provider talks to public APIs, but still use R2 state for consistency and cost control.
+
+## Current Backend Pattern
+
+Each stack keeps an ignored backend config copied from an example:
+
+```bash
+cp backend.r2.tfbackend.example backend.r2.tfbackend
+terraform init -backend-config=backend.r2.tfbackend
+```
+
+The VPS stores backend credentials in:
+
+```text
+/root/.config/homelab/cloudflare-r2.env
+```
+
+`/root/.bashrc` sources that file so fresh root shells have the R2 and Cloudflare variables available. Do not commit that env file.
+
+## Cloudflare API IPv6 Gotcha
+
+The VPS has both IPv4 and IPv6:
+
+```text
+72.61.95.150
+2a02:4780:41:59ef::1
+```
+
+The Cloudflare bootstrap token was originally restricted only to `72.61.95.150/32`. Cloudflare API calls from the VPS preferred IPv6 and failed with:
+
+```text
+Cannot use the access token from location: 2a02:4780:41:59ef::1
+```
+
+Use one of these approaches:
+
+- Add `2a02:4780:41:59ef::1/128` to the token IP condition.
+- Or pin Terraform API calls to IPv4 with Docker `--add-host`.
+
+Successful pattern:
+
+```bash
+CF_API_IPV4=$(getent ahostsv4 api.cloudflare.com | awk 'NR==1{print $1}')
+docker run --rm --network host --add-host "api.cloudflare.com:$CF_API_IPV4" ...
+```
 
 ## State Naming
 

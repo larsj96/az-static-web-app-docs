@@ -1,12 +1,12 @@
 # Repository Split Plan
 
-This workspace remains the planning and runbook area. Long term, automation should live in smaller repos with separate Terraform Cloud workspaces, credentials, and blast radius.
+This workspace remains the planning and runbook area. Automation is being split into smaller repos with separate state, credentials, and blast radius.
 
 ## Target Repos
 
 ```text
-homelab-docs
-  Architecture, runbooks, network/storage notes, and future NetBox/IPAM decisions.
+az-static-web-app-docs
+  Published homelab documentation source. Despite the old repo name, this now builds the self-hosted MkDocs site.
 
 terraform-proxmox
   Proxmox VMs, cloud images, cloud-init, VM modules, and storage references.
@@ -17,13 +17,13 @@ terraform_fortigate
 terraform-palo
   Palo Alto zones, objects, policies, and related provider state.
 
-terraform_cloudfare / future terraform-cloudflare
-  Cloudflare DNS, tunnels, lanilsen.com, and public service exposure.
+terraform_cloudfare / local terraform-cloudflare
+  Cloudflare DNS, tunnels, Access applications, identity providers, lanilsen.com, and public service exposure.
 
-Ansible / future ansible-homelab
+Ansible / local ansible-homelab
   Ubuntu baseline, Docker install, app roles, monitoring agents, and post-cloud-init config.
 
-docker / future docker-homelab
+docker / local docker-homelab
   Docker Compose stacks and service runtime config.
 ```
 
@@ -47,9 +47,7 @@ C:\github\ansible-homelab
 C:\github\docker-homelab
 ```
 
-Git was not installed on PATH in the Codex Windows session, and WSL was not visible from this runtime. The user ran the clone commands manually from their WSL Ubuntu shell.
-
-As of `2026-05-20`, these are now real local clones:
+As of `2026-05-20`, these are real local clones managed through WSL:
 
 ```text
 C:\github\terraform-proxmox
@@ -58,9 +56,10 @@ C:\github\terraform-palo
 C:\github\terraform-cloudflare
 C:\github\ansible-homelab
 C:\github\docker-homelab
+C:\github\az-static-web-app-docs
 ```
 
-The preserved scaffold folders are:
+The preserved scaffold folders may still exist:
 
 ```text
 C:\github\terraform-cloudflare-scaffold
@@ -98,6 +97,38 @@ network: vmbr0, VLAN 110
 
 `larsj96/docker` was empty after clone, so a starter `README.md` was added via the GitHub connector.
 
+`larsj96/terraform_cloudfare` now contains the live Cloudflare docs tunnel stack:
+
+```text
+docs-tunnel/access.tf
+docs-tunnel/identity.tf
+docs-tunnel/main.tf
+docs-tunnel/outputs.tf
+docs-tunnel/providers.tf
+docs-tunnel/variables.tf
+docs-tunnel/versions.tf
+docs-tunnel/backend.r2.tfbackend.example
+```
+
+Live resources in that state:
+
+```text
+docs.lanilsen.com DNS record
+homelab-docs Cloudflare Tunnel
+Cloudflare Tunnel config -> http://10.0.0.37
+Homelab Docs Cloudflare Access application
+One-time PIN Access identity provider
+```
+
+`larsj96/Ansible` contains the live service deployment roles:
+
+```text
+roles/mkdocs/
+roles/cloudflared/
+playbooks/mkdocs.yml
+playbooks/cloudflared-docs.yml
+```
+
 ## State Boundary Rule
 
 Keep Terraform state split by platform/failure domain:
@@ -110,3 +141,16 @@ Palo Alto and Fortigate credentials should stay separate.
 ```
 
 Use explicit variables and documentation first. Avoid remote-state coupling until there is a strong reason.
+
+## Naming Cleanup Still Pending
+
+Some remote repo names are historical:
+
+| Current remote | Local folder | Long-term preferred name |
+| --- | --- | --- |
+| `terraform_cloudfare` | `terraform-cloudflare` | `terraform-cloudflare` |
+| `Ansible` | `ansible-homelab` | `ansible-homelab` |
+| `docker` | `docker-homelab` | `docker-homelab` |
+| `az-static-web-app-docs` | `az-static-web-app-docs` | `homelab-docs` or keep as-is with updated description |
+
+Renaming repos is optional. State keys and docs should use logical stack names even if GitHub repo names lag behind.
