@@ -44,9 +44,11 @@ flowchart LR
 Plex is special. Cloudflare Tunnel can technically proxy HTTP traffic, but Plex streaming through Cloudflare may conflict with Cloudflare terms or perform poorly depending on traffic pattern and plan. A safer design is:
 
 - Use Cloudflare DNS for a friendly hostname.
-- Use Cloudflare Tunnel for Plex management or lightweight access only if acceptable.
+- Use Cloudflare Tunnel for Plex management or lightweight access only after reviewing the traffic/policy fit.
 - Prefer VPN or Plex's own remote access path for heavy streaming.
 - Revisit this before exposing Plex publicly.
+
+For the broader media stack, publish admin apps such as Sonarr, Radarr, Jackett/Prowlarr, qBittorrent, and Overseerr through Cloudflare Access rather than exposing them directly.
 
 ## Terraform Scope
 

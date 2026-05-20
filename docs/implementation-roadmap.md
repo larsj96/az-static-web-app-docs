@@ -61,3 +61,13 @@
 - [x] Publish docs through tunnel.
 - [x] Add Cloudflare Access OTP allowlist.
 - [ ] Reassess Plex exposure carefully before enabling it.
+
+## Phase 8: Media Lab
+
+- [ ] Use HP2's 10x600 GB SAS set as first media-library capacity.
+- [ ] Keep media storage separate from VM boot disks.
+- [ ] Create `media1` for Docker Compose media apps.
+- [ ] Start Plex on `media1` only if simple enough, then split to `plex1` when compute/transcoding deserves it.
+- [ ] Add Sonarr, Radarr, Jackett/Prowlarr, qBittorrent/Transmission, and Overseerr through Ansible.
+- [ ] Add Telegraf monitoring to media VMs by default.
+- [ ] Use Cloudflare Access for admin apps; decide Plex streaming exposure separately.
