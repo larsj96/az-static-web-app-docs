@@ -46,10 +46,10 @@
 
 ## Phase 6: Monitoring
 
-- [ ] Create `monitoring1` with Terraform.
-- [ ] Deploy Docker-based InfluxDB, Telegraf, Chronograf, Kapacitor, OpenSearch, Dashboards, and Logstash.
-- [ ] Install Telegraf agents on bastion/docs/docker/monitoring VMs.
-- [ ] Add ping and x509 checks from the central monitoring host.
+- [x] Create `monitoring1` with Terraform.
+- [x] Deploy Docker-based InfluxDB, Telegraf, Chronograf, Kapacitor, OpenSearch, Dashboards, and Logstash.
+- [x] Install Telegraf agents on bastion/docs/docker/monitoring VMs.
+- [x] Add ping and x509 checks from the central monitoring host.
 - [ ] Add syslog/audit forwarding into Logstash/OpenSearch.
 - [ ] Decide dashboard access path: VPN-only or Cloudflare Access.
 

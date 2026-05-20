@@ -20,7 +20,7 @@ Terraform stack:
 terraform-proxmox/proxmox-core
 ```
 
-Planned VM:
+Live VM:
 
 | VM | VMID | VLAN | Purpose | Size |
 | --- | ---: | ---: | --- | --- |
@@ -34,13 +34,13 @@ CIDR 10.0.0.32/27
 gateway 10.0.0.33
 ```
 
-Initial inventory placeholder:
+Current inventory:
 
 ```text
 monitoring1 ansible_host=10.0.0.38 ansible_user=ubuntu
 ```
 
-Adjust the inventory if Fortigate DHCP assigns a different reservation.
+Fortigate DHCP assigned `10.0.0.38`, and the QEMU guest agent reports that address.
 
 ## Metrics Pipeline
 
@@ -107,7 +107,7 @@ flowchart LR
   os --> dash["OpenSearch Dashboards"]
 ```
 
-Initial exposed ports on `monitoring1`:
+Live exposed ports on `monitoring1`:
 
 | Port | Service |
 | ---: | --- |
@@ -147,7 +147,13 @@ git pull
 ansible-playbook playbooks/monitoring.yml
 ```
 
-Secrets needed before first deploy:
+Secrets are stored on `bastion01` in the ignored file:
+
+```text
+~/ansible-homelab/group_vars/monitoring_secrets.yml
+```
+
+Do not commit this file. It contains:
 
 ```text
 influxdb_admin_password
@@ -156,7 +162,7 @@ opensearch_initial_admin_password
 grafana_admin_password
 ```
 
-Store them in Ansible Vault or another ignored secret file, not in Git.
+Later, move this into Ansible Vault when the workflow settles.
 
 ## Terraform And Cloud-Init Contract
 
@@ -175,12 +181,29 @@ Do not pack full monitoring configuration into cloud-init. Keep cloud-init as th
 
 ## Next Steps
 
-1. Apply Terraform for `monitoring1`.
-2. Confirm Fortigate DHCP IP and update Ansible inventory if not `10.0.0.38`.
-3. Create Ansible secret values.
-4. Deploy `playbooks/monitoring.yml`.
-5. Add Filebeat/Auditbeat or syslog forwarding after metrics are stable.
-6. Decide whether dashboards should stay VPN-only or be protected by Cloudflare Access.
+1. Add Grafana data sources and first dashboards.
+2. Add Filebeat/Auditbeat or syslog forwarding after metrics are stable.
+3. Point Fortigate, Proxmox, and key Linux syslog toward `10.0.0.38:5514`.
+4. Decide whether dashboards should stay VPN-only or be protected by Cloudflare Access.
+5. Add `media1` and future VMs to `telegraf_agents` during onboarding.
+
+## Deployment Status
+
+Deployed on `2026-05-21`:
+
+| Component | Status |
+| --- | --- |
+| Terraform VM `monitoring1` | Created and running |
+| Cloud-init snippet | Uploaded to `local:snippets/terraform-noble-base-cloud-config.yaml` |
+| Docker monitoring stack | Running |
+| InfluxDB health | HTTP `200` locally |
+| Grafana login | HTTP `200` locally |
+| OpenSearch API | HTTP `200` locally |
+| OpenSearch Dashboards | HTTP `302` locally |
+| Telegraf on `bastion01` | Active |
+| Telegraf on `mkdocs01` | Active |
+| Telegraf on `docker1` | Active |
+| Telegraf on `monitoring1` | Active |
 
 ## Grafana Public Access Option
 
