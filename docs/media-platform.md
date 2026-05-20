@@ -40,15 +40,16 @@ That gives cleaner backups, easier VM rebuilds, and less risk to the Proxmox hos
 
 ## Terraform Shape
 
-Create the VM infrastructure in `terraform-proxmox/proxmox-core`:
+Create the VM infrastructure in `terraform-proxmox/proxmox-core`. The first scaffold is now:
 
 ```text
 media1
-  purpose: Docker Compose media automation and maybe first Plex instance
-  node: hp2 preferred if storage locality matters
-  network: service VLAN
-  disk: VM boot disk on nvme-local
-  media: mounted from HP2 SAS path, not baked into the boot disk
+  VMID: 9050
+  purpose: Docker Compose media automation and first Plex instance
+  node: current proxmox-core target node, usually hp1 until hp2 placement is made explicit
+  network: service VLAN 12
+  disk: 250 GiB VM boot/app disk on nvme-local
+  media: future mount from HP2 SAS path, not baked into the boot disk
 
 plex1
   purpose: optional standalone Plex compute
@@ -59,7 +60,36 @@ Keep the SAS media library out of Terraform-managed VM boot disks. Terraform sho
 
 ## Ansible Shape
 
-Use Ansible for the OS and Docker layer:
+Use Ansible for the OS and Docker layer. The first scaffold lives in `ansible-homelab`:
+
+```text
+inventory/homelab.ini
+playbooks/media.yml
+group_vars/media.yml
+group_vars/media_secrets.yml.example
+roles/media_stack/
+```
+
+The media playbook applies `docker_host` and `media_stack`. `media_stack` renders a Docker Compose stack for Plex, Sonarr, Radarr, Prowlarr, qBittorrent, and Overseerr.
+
+Current first-boot behavior:
+
+- Use local `/mnt/media`, `/mnt/media/movies`, and `/mnt/media/tv` directories.
+- Keep Plex claim tokens out of git in ignored `group_vars/media_secrets.yml`.
+- Leave Cloudflare exposure out of this first pass.
+- Add the host to `telegraf_agents` so the shared monitoring playbook can deploy the agent.
+
+Future HP2 SAS mount behavior:
+
+```yaml
+media_create_local_library_dirs: false
+media_nfs_enabled: true
+media_nfs_src: "hp2.example:/export/media"
+```
+
+The exact HP2 export path and permissions still need to be confirmed before enabling this.
+
+Ansible owns:
 
 - Install Docker and Compose.
 - Create service users and directory layout.
@@ -75,9 +105,20 @@ Suggested app set:
 | Plex | Playback and library server |
 | Sonarr | TV automation |
 | Radarr | Movie automation |
-| Jackett or Prowlarr | Indexer bridge |
-| qBittorrent or Transmission | Downloads |
+| Prowlarr | Indexer bridge |
+| qBittorrent | Downloads |
 | Overseerr | Request workflow |
+
+Initial internal ports:
+
+| Port | Service |
+| ---: | --- |
+| `32400` | Plex |
+| `8989` | Sonarr |
+| `7878` | Radarr |
+| `9696` | Prowlarr |
+| `8080` | qBittorrent Web UI |
+| `5055` | Overseerr |
 
 ## Cloudflare And Access
 
@@ -91,11 +132,29 @@ Use Cloudflare Access for admin-facing HTTP apps:
 
 Plex needs a separate decision. Cloudflare Tunnel may be fine for management/light access, but avoid blindly proxying heavy video traffic through Cloudflare. Prefer VPN or Plex-native remote access for streaming unless the policy and traffic profile are confirmed acceptable.
 
-## First Implementation Steps
+## Deployment Status
 
-1. Confirm the HP2 SAS volume layout and filesystem.
+Deployed on `2026-05-21`:
+
+| Component | Status |
+| --- | --- |
+| Terraform VM `media1` | Created and running |
+| VMID | `9050` |
+| IP | `10.0.0.39` |
+| Plex | Running |
+| Sonarr | Running |
+| Radarr | Running |
+| Prowlarr | Running |
+| qBittorrent | Running |
+| Overseerr | Running |
+| Telegraf | Active |
+
+The current media library path is local to the VM for bootstrapping. Move it to HP2 SAS-backed storage once the export path and permissions are decided.
+
+## Next Implementation Steps
+
+1. Confirm the HP2 SAS volume layout, filesystem, export path, and permissions.
 2. Decide whether HP2 exports NFS directly or a storage VM owns the export.
-3. Add `media1` to Terraform.
-4. Add a media Docker Compose role to Ansible.
-5. Add Telegraf to `media1` through the shared `telegraf_agents` group.
-6. Add Cloudflare DNS/Access only after the internal app works.
+3. Enable the media NFS variables once the HP2 SAS export is real.
+4. Pin qBittorrent credentials through ignored Ansible secrets instead of relying on the generated temporary password.
+5. Add Cloudflare DNS/Access only after the internal app works.

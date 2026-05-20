@@ -61,6 +61,7 @@ bastion01
 mkdocs01
 docker1
 monitoring1
+media1
 ```
 
 When a new Terraform VM is added, add it to `telegraf_agents` after the first boot. That keeps the VM onboarding flow simple:
@@ -86,11 +87,46 @@ Initial targets:
 10.0.0.33
 10.0.0.37
 10.0.0.99
+10.0.0.161
 10.0.0.162
+10.0.0.163
+10.0.0.164
+10.0.0.165
+10.0.124.165
+10.0.124.166
+10.0.124.167
 1.1.1.1
 https://docs.lanilsen.com:443
 https://10.0.0.162:8006
+https://10.0.124.165:443
+https://10.0.124.166:443
+https://10.0.124.167:443
 ```
+
+## Network Device Monitoring
+
+`monitoring1` is also the collector host for infrastructure devices:
+
+| Device class | Current targets | Current method |
+| --- | --- | --- |
+| Proxmox management | `10.0.0.162`, `10.0.0.163`, `10.0.0.164`, `10.0.0.165` | Ping, Proxmox web certificate check on `10.0.0.162` |
+| HP iLO | `10.0.124.165`, `10.0.124.166`, `10.0.124.167` | Ping and HTTPS certificate checks |
+| Fortigate | `10.0.0.33`, `10.0.0.161` | Ping |
+
+SNMP is scaffolded but disabled by default:
+
+```yaml
+monitoring_snmp_enabled: false
+monitoring_snmp_community: "{{ snmp_community | default('') }}"
+```
+
+When SNMP is enabled on iLO/Fortigate, set the community in the ignored `group_vars/monitoring_secrets.yml`, flip `monitoring_snmp_enabled` to `true`, and rerun:
+
+```bash
+ansible-playbook playbooks/monitoring.yml
+```
+
+The first SNMP collection uses generic `SNMPv2-MIB` and `IF-MIB` data: system name, uptime, interface names, interface status, and in/out octets. Later we can add richer device-specific collection with HP iLO Redfish/IPMI exporter, Fortigate SNMP OIDs, or a Prometheus exporter if we want deeper dashboards.
 
 ## Logs Pipeline
 
@@ -185,7 +221,8 @@ Do not pack full monitoring configuration into cloud-init. Keep cloud-init as th
 2. Add Filebeat/Auditbeat or syslog forwarding after metrics are stable.
 3. Point Fortigate, Proxmox, and key Linux syslog toward `10.0.0.38:5514`.
 4. Decide whether dashboards should stay VPN-only or be protected by Cloudflare Access.
-5. Add `media1` and future VMs to `telegraf_agents` during onboarding.
+5. Add the Dell iDRAC management IP when confirmed.
+6. Add richer SNMP/Redfish/IPMI dashboards after device SNMP is enabled.
 
 ## Deployment Status
 
@@ -204,6 +241,11 @@ Deployed on `2026-05-21`:
 | Telegraf on `mkdocs01` | Active |
 | Telegraf on `docker1` | Active |
 | Telegraf on `monitoring1` | Active |
+| Telegraf on `media1` | Active |
+| Grafana InfluxDB datasource | Provisioned |
+| Grafana OpenSearch datasource | Provisioned |
+| iLO/Fortigate/Proxmox active checks | Configured on central Telegraf |
+| SNMP collection | Scaffolded, disabled until device SNMP/community is confirmed |
 
 ## Grafana Public Access Option
 
