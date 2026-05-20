@@ -44,7 +44,16 @@
 - [ ] Bootstrap Ceph through Proxmox tooling.
 - [ ] Only after validation, encode the stable parts in docs or Terraform.
 
-## Phase 6: Cloudflare
+## Phase 6: Monitoring
+
+- [ ] Create `monitoring1` with Terraform.
+- [ ] Deploy Docker-based InfluxDB, Telegraf, Chronograf, Kapacitor, OpenSearch, Dashboards, and Logstash.
+- [ ] Install Telegraf agents on bastion/docs/docker/monitoring VMs.
+- [ ] Add ping and x509 checks from the central monitoring host.
+- [ ] Add syslog/audit forwarding into Logstash/OpenSearch.
+- [ ] Decide dashboard access path: VPN-only or Cloudflare Access.
+
+## Phase 7: Cloudflare
 
 - [x] Create dedicated Cloudflare Terraform stack under `docs-tunnel`.
 - [x] Manage `docs.lanilsen.com` DNS record.

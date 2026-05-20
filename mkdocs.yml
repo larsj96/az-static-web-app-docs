@@ -63,6 +63,7 @@ nav:
       - Implementation Roadmap: implementation-roadmap.md
   - Services:
       - Self-Hosted Docs Platform: self-hosted-docs-platform.md
+      - Monitoring Platform: monitoring-platform.md
       - Cloudflare Tunnel And Plex: cloudflare-tunnel-plex.md
   - Operations:
       - Frankfurt VPS Ops Hub: frankfurt-vps-ops-hub.md
