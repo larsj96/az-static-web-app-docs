@@ -15,7 +15,7 @@ terraform_fortigate
   Fortigate VLANs, DHCP reservations, firewall policy, and IPsec to the Frankfurt VPS.
 
 terraform-palo
-  Palo Alto zones, objects, policies, and related provider state.
+  Palo Alto bootstrap, zones, interfaces, policies, and route-based VPNs for the PA-510 cabin/workstation firewall.
 
 terraform_cloudfare / local terraform-cloudflare
   Cloudflare DNS, tunnels, Access applications, identity providers, lanilsen.com, and public service exposure.
@@ -154,3 +154,15 @@ Some remote repo names are historical:
 | `az-static-web-app-docs` | `az-static-web-app-docs` | `homelab-docs` or keep as-is with updated description |
 
 Renaming repos is optional. State keys and docs should use logical stack names even if GitHub repo names lag behind.
+
+## Palo Alto Split
+
+The Palo Alto repo uses separate R2 state keys:
+
+```text
+terraform-palo/core-bootstrap/terraform.tfstate
+terraform-palo/network-base/terraform.tfstate
+terraform-palo/vpn-vps/terraform.tfstate
+```
+
+Keep policy-based routing narrow. The previous Discord/VPS PBF experiment was unstable and should not be recreated as a default internet path.

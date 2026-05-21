@@ -60,6 +60,7 @@ nav:
       - Operating Model: iac-operating-model.md
       - Terraform State: terraform-cloud-state.md
       - Repository Split: repo-split-plan.md
+      - Palo Alto Terraform: palo-alto-terraform.md
       - Implementation Roadmap: implementation-roadmap.md
   - Services:
       - Self-Hosted Docs Platform: self-hosted-docs-platform.md

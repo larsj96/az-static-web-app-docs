@@ -21,7 +21,7 @@ Future Codex sessions should read `AGENTS.md` in the local Homelab workspace fir
 | Bastion | `bastion01` is live on VLAN 14 at `10.0.0.99` and is the Ansible control/jump host. |
 | Docs VM | `mkdocs` is live on VLAN 12 at `10.0.0.37`, built by Ansible from this repo. |
 | Public docs | `https://docs.lanilsen.com/` is published by Cloudflare Tunnel and protected by Cloudflare Access. |
-| Terraform state | Proxmox and Cloudflare docs stacks use Cloudflare R2 bucket `lanilsen-terraform-state`. |
+| Terraform state | Proxmox, Cloudflare docs, and Palo Alto stacks use Cloudflare R2 bucket `lanilsen-terraform-state`. |
 | Automation model | Terraform creates infrastructure; cloud-init bootstraps guests; Ansible configures services. |
 
 ## Key Decision
@@ -48,4 +48,5 @@ See [Terraform State](terraform-cloud-state.md) for the recommended state split.
 - [Cloudflare Tunnel And Plex](cloudflare-tunnel-plex.md)
 - [Frankfurt VPS Ops Hub](frankfurt-vps-ops-hub.md)
 - [Repository Split Plan](repo-split-plan.md)
+- [Palo Alto Terraform](palo-alto-terraform.md)
 - [Implementation Roadmap](implementation-roadmap.md)

@@ -24,6 +24,9 @@ Suggested state keys:
 terraform-proxmox/proxmox-core/terraform.tfstate
 terraform-fortigate/core/terraform.tfstate
 terraform-palo/core/terraform.tfstate
+terraform-palo/core-bootstrap/terraform.tfstate
+terraform-palo/network-base/terraform.tfstate
+terraform-palo/vpn-vps/terraform.tfstate
 terraform-cloudflare/docs-tunnel/terraform.tfstate
 terraform-cloudflare/dns/terraform.tfstate
 ```
@@ -74,6 +77,19 @@ cloudflare_zero_trust_access_identity_provider.onetimepin
 data.cloudflare_zero_trust_tunnel_cloudflared_token.docs
 ```
 
+Palo Alto state migration target:
+
+```text
+bucket: lanilsen-terraform-state
+state keys:
+  terraform-palo/core-bootstrap/terraform.tfstate
+  terraform-palo/network-base/terraform.tfstate
+  terraform-palo/vpn-vps/terraform.tfstate
+execution host: workstation behind Palo Alto, or another host that can reach the PA-510 management API
+```
+
+The old Palo Alto `network-base` and `vpn-vps` workspaces used HCP Terraform. They are being moved to R2 so Palo Alto state follows the same low-cost, per-stack model as Proxmox and Cloudflare.
+
 ## Execution Constraint
 
 Terraform Cloud remote workers cannot reach private homelab APIs such as:
@@ -109,7 +125,9 @@ The agent should have:
 | --- | --- | --- | --- |
 | `terraform-proxmox/proxmox-core` | `terraform-proxmox` | Local/VPS/runner | Proxmox cluster, VMs, templates |
 | `terraform-fortigate/core` | firewall repo | Local/VPS/runner | Fortigate base config, VLANs, policy, NAT |
-| `homelab-palo-lab` | `terraform-palo` | Local only unless needed | Palo Alto lab/firewall migration work |
+| `terraform-palo/core-bootstrap` | `terraform-palo` | Workstation/local | PA-510 hostname, NTP, bootstrap inventory |
+| `terraform-palo/network-base` | `terraform-palo` | Workstation/local | PA-510 zones, interfaces, DHCP, NAT, security policy |
+| `terraform-palo/vpn-vps` | `terraform-palo` | Workstation/local | PA-510 route-based IPsec to the Frankfurt VPS |
 | `terraform-cloudflare/docs-tunnel` | `terraform_cloudfare` / local `terraform-cloudflare` | VPS | Docs DNS, tunnel, Access app, OTP IdP |
 | `terraform-cloudflare/dns` | `terraform_cloudfare` / local `terraform-cloudflare` | Local/VPS/runner | Future shared DNS records |
 | `homelab-docs-platform` | `terraform-proxmox` + `Ansible` + `terraform_cloudfare` | VPS/bastion | VM, docs deployment, public tunnel |

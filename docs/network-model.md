@@ -16,9 +16,27 @@
 | Device | Role |
 | --- | --- |
 | Fortigate 500D | Firewall, routing, NAT, policy, VPN/IPsec termination |
+| Palo Alto PA-510 | Cabin/workstation firewall behind Starlink; managed in `terraform-palo`. |
 | Zyxel XGS1250-12 | 10 Gbit Ceph/storage and migration network |
 | MikroTik CRS326-24G-2S+RM | VM internet traffic and Proxmox management switching |
 | Access point | Guest/IoT and management SSIDs |
+
+## Palo Alto Cabin / Workstation Site
+
+The Palo Alto is separate from the Mo i Rana Fortigate homelab firewall. It fronts the workstation network and currently has Starlink as the primary WAN.
+
+Do not use app-specific policy-based routing for normal workstation internet. The Discord-over-VPS PBF experiment was unstable and caused internet issues. The sane default is:
+
+```text
+workstation internet -> Palo Alto -> Starlink WAN
+selected private routes -> Palo Alto tunnel -> VPS or future IPv6 site-to-site
+```
+
+Future tunnel direction:
+
+- keep the Palo Alto to VPS route-based tunnel for selected private/ops subnets
+- test IPv6 IPsec directly between Palo Alto and Fortigate
+- add WireGuard outbound as an automation fallback if needed
 
 ## Management Boundary
 
