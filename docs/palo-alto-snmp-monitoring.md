@@ -96,6 +96,8 @@ pan_system
 pan_zone
 pan_vsys
 pan_buffers
+pan_sensors
+pan_interfaces
 pan_global_counters
 pan_dos
 pan_drop
@@ -109,12 +111,33 @@ uid: paloalto-panograf-homelab
 source: larsj96/Ansible roles/monitoring_stack/templates/grafana-dashboard-paloalto-panograf.json.j2
 ```
 
-Live verification from `monitoring1` showed fresh Influx samples for CPU load, active sessions, VSYS sessions, zone CPS, packet/storage buffers, global counters, DoS counters, and drop counters from:
+Live verification from `monitoring1` showed fresh Influx samples for CPU load, active sessions, VSYS sessions, zone CPS, packet/storage buffers, ENTITY-SENSOR hardware values, interface counters/status, global counters, DoS counters, and drop counters from:
 
 ```text
 agent_host=10.1.1.3
 device=pa510-homelab-ljn
 ```
+
+The PA-510 currently exposes this hardware sensor over SNMP:
+
+```text
+CPU die Temperature
+```
+
+It does not currently expose fan tachometer values through the ENTITY-SENSOR walk, so the dashboard uses a `Hardware Sensors` panel instead of a fake fan panel. If a future Palo platform exposes fan sensors, they should appear in the same `pan_sensors` measurement.
+
+Interface traffic is collected through IF-MIB/IF-XTable into `pan_interfaces`:
+
+```text
+ifOperStatus
+ifHCInOctets
+ifHCOutOctets
+ifName / ifDescr / ifAlias tags
+```
+
+Grafana derives throughput from the octet counters and shows status for all interfaces. Tunnel interface status is also shown for `tunnel*` interfaces.
+
+Important limitation: Palo Alto does not expose real IPsec SA status through SNMP. Tunnel interface status is useful, but it is not the same as phase-1/phase-2 SA health. For true status of the VPS IPv4, VPS IPv6, and future Fortigate/Palo tunnels, add an XML API collector once a valid Palo API key is available on `monitoring1`. The API collector should poll `show vpn ike-sa` and `show vpn ipsec-sa`, then write a separate measurement such as `pan_vpn_tunnels`.
 
 If the dashboard looks empty, first verify the collector path:
 
