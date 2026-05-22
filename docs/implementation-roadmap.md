@@ -64,10 +64,11 @@
 
 ## Phase 8: Media Lab
 
-- [ ] Use HP2's 10x600 GB SAS set as first media-library capacity.
-- [ ] Keep media storage separate from VM boot disks.
+- [x] Use hp3 `sas-hp3` as first media-library capacity.
+- [x] Keep media storage separate from VM boot disks.
 - [x] Create `media1` with Terraform.
-- [x] Deploy Plex, Sonarr, Radarr, Prowlarr, qBittorrent, and Overseerr with Ansible.
+- [x] Pin `media1` placement to hp3 instead of the generic Proxmox target node.
+- [x] Deploy Plex, Sonarr, Radarr, Jackett, Prowlarr, qBittorrent, Deluge, Overseerr, Ombi, and Unpackerr with Ansible.
 - [x] Add Telegraf monitoring to `media1`.
 - [ ] Start Plex on `media1` only if simple enough, then split to `plex1` when compute/transcoding deserves it.
 - [ ] Use Cloudflare Access for admin apps; decide Plex streaming exposure separately.

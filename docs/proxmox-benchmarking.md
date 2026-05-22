@@ -119,6 +119,27 @@ bench-hp1
 
 The role starts one persistent `iperf3` daemon on that inventory host, runs client tests from every other benchmark VM, stores `iperf3.json` in each client archive, then stops the daemon.
 
+The Frankfurt VPS is also prepared as a persistent WAN/VPN iperf target:
+
+| Host | Service | Port | Notes |
+| --- | --- | ---: | --- |
+| `72.61.95.150` | `iperf3-server.service` | `5201/tcp` | Installed with systemd on `2026-05-22`; useful for VM-to-VPS and VPN-path baselines. |
+
+Use it without asking Ansible to manage the VPS-side process:
+
+```bash
+ansible-playbook -i inventory/benchmarks.ini playbooks/benchmarks.yml \
+  -e benchmark_iperf_host=72.61.95.150 \
+  -e benchmark_iperf_manage_server=false
+```
+
+VPS service checks:
+
+```bash
+ssh root@72.61.95.150 'systemctl status iperf3-server --no-pager'
+ssh root@72.61.95.150 'ss -lntp | grep :5201'
+```
+
 Quick smoke test:
 
 ```bash

@@ -5,7 +5,7 @@
 Build a lab media platform without mixing three different concerns into one fragile VM:
 
 - Plex compute and user-facing playback.
-- Media automation such as Sonarr, Radarr, Jackett/Prowlarr, qBittorrent/Transmission, and Overseerr.
+- Media automation such as Sonarr, Radarr, Jackett, Prowlarr, qBittorrent, Deluge, Ombi, and Overseerr.
 - Bulk movie/TV storage.
 
 The first version can be simple, but the boundaries should be clear so the stack can grow without a rebuild.
@@ -18,45 +18,53 @@ The first version can be simple, but the boundaries should be clear so the stack
 | --- | --- |
 | VM | `media1` |
 | VMID | `9050` |
-| IP | `10.0.0.39` |
 | VLAN | `12 / fortigate_onprem_k8s` |
 | Role | Docker Compose host for Plex and media automation |
+| Placement | Pinned to `hp3` |
+| Boot/app storage | `nvme-local` |
+| Media storage | `sas-hp3`, attached as a dedicated data disk and mounted at `/mnt/media` |
 
 The current app stack is:
 
 - Plex
 - Sonarr
 - Radarr
+- Jackett
 - Prowlarr
 - qBittorrent
+- Deluge
 - Overseerr
+- Ombi
+- Unpackerr
 
-The services are running on `media1` now, with local media directories used only as the bootstrap storage target. Do not treat the VM boot/app disk as the long-term media library.
+`media1` should not use the generic Proxmox target-node variable. It belongs near the storage it consumes: boot/app data on local NVMe and bulk media on the hp3 SAS pool.
 
 ## Recommended Split
 
 | Layer | First Choice | Why |
 | --- | --- | --- |
-| Media storage | HP2 local SAS set, 10x600 GB | Good use for the existing 5 TB-ish SAS capacity that should not become Ceph right now. |
-| Media apps | One Docker Compose VM, `media1` | Sonarr/Radarr/Prowlarr/qBittorrent/Overseerr work well together and share download/import paths. |
+| Media storage | `hp3` local SAS LVM-thin storage, `sas-hp3` | Good use for the current 4.9 TB SAS capacity that should not become Ceph right now. |
+| Media apps | One Docker Compose VM, `media1` | The Arr stack, indexers, request apps, downloaders, and extraction helper share paths cleanly. |
 | Plex compute | Start on `media1`, split to `plex1` later if needed | Keeps day-one simple while preserving a clean migration path for transcoding/GPU/CPU tuning. |
 | External access | Cloudflare DNS and Access for admin apps; be careful with streaming | Cloudflare Tunnel is great for admin HTTP apps, but heavy Plex streaming should be reviewed before proxying. |
 
-## Why Not Put Everything Directly On HP2?
+## Why Not Put Everything Directly On The Proxmox Host?
 
-HP2 has useful local SAS storage, but Proxmox hosts should stay boring. The better pattern is:
+The Proxmox node has useful local SAS storage, but Proxmox hosts should stay boring. The better pattern is:
 
-1. HP2 owns the disks.
-2. A storage service exposes a media path to the media VM.
-3. The app VM runs containers and mounts that path.
+1. The Proxmox node owns the disks.
+2. Terraform attaches a dedicated data disk from that local storage to `media1`.
+3. The app VM formats and mounts the disk at `/mnt/media`, then runs containers on top.
+4. If Plex compute later moves to `plex1`, the media path can be exported over NFS or moved behind a storage VM.
 
-That gives cleaner backups, easier VM rebuilds, and less risk to the Proxmox host.
+That gives cleaner rebuilds, easier monitoring, and less risk to the Proxmox host.
 
 ## Storage Options
 
 | Option | Fit | Notes |
 | --- | --- | --- |
-| NFS export from HP2 | Good first lab choice | Simple for Linux VMs, predictable permissions, easy to mount on `media1` or `plex1`. |
+| Dedicated `sas-hp3` data disk on `media1` | Current first choice | Simple, fast to implement, and keeps the SAS media library off the boot disk. |
+| NFS export from `media1` or a storage VM | Good later choice | Lets a future `plex1` compute VM reuse the same media library without moving the data. |
 | SMB share from a storage VM | Good if Windows clients need direct access | More moving parts, but useful later. |
 | Passthrough/controller to storage VM | Possible later | Stronger isolation, but more planning and downtime. |
 | Ceph | Later | Wait until 10 Gbit and SAS layout are proven. Do not force media storage into Ceph now. |
@@ -67,43 +75,49 @@ Keep the storage contract stable even when the backing storage changes:
 
 | Path | Owner | Purpose |
 | --- | --- | --- |
-| `/opt/media/config` | `media1` local disk | Container configs and app state. |
-| `/opt/media/downloads` | `media1` local disk for now | Shared download/import staging path. |
-| `/mnt/media/movies` | HP2 SAS NFS later | Plex/Radarr movie library. |
-| `/mnt/media/tv` | HP2 SAS NFS later | Plex/Sonarr TV library. |
+| `/opt/media/config` | `media1` boot/app disk | Container configs and app state. |
+| `/opt/media/downloads` | `media1` boot/app disk | Shared download/import staging path. |
+| `/opt/media/downloads/completed` | `media1` boot/app disk | Completed download/extraction handoff path. |
+| `/opt/media/downloads/incomplete` | `media1` boot/app disk | In-progress download path. |
+| `/mnt/media/movies` | `media1` SAS data disk from `sas-hp3` | Plex/Radarr movie library. |
+| `/mnt/media/tv` | `media1` SAS data disk from `sas-hp3` | Plex/Sonarr TV library. |
 
-The future HP2 SAS model should expose one media export to `media1`, mounted at `/mnt/media`, with `movies` and `tv` below it. That lets Plex stay on the same container paths while the host mount changes from local bootstrap directories to NFS-backed storage.
-
-Before enabling NFS:
-
-- Confirm the HP2 SAS filesystem and export path.
-- Confirm the UID/GID used by the media containers can read and write the export.
-- Confirm the export is reachable from VLAN 12.
-- Take note of free capacity and expected growth rate before moving real libraries.
+The stable application contract is `/mnt/media`. Today it is a dedicated Terraform-attached SAS disk. Later it can become an NFS mount or a replicated storage service without changing Plex/Sonarr/Radarr container paths.
 
 ## Terraform Shape
 
-Create the VM infrastructure in `terraform-proxmox/proxmox-core`. The first scaffold is now:
+The VM infrastructure lives in `terraform-proxmox/proxmox-core`:
 
 ```text
 media1
   VMID: 9050
   purpose: Docker Compose media automation and first Plex instance
-  node: current proxmox-core target node, usually hp1 until hp2 placement is made explicit
+  node: hp3
   network: service VLAN 12
-  disk: 250 GiB VM boot/app disk on nvme-local
-  media: future mount from HP2 SAS path, not baked into the boot disk
+  boot/app disk: 120 GiB on nvme-local
+  media disk: 4000 GiB on sas-hp3, mounted by Ansible at /mnt/media
 
 plex1
   purpose: optional standalone Plex compute
   create later if transcoding, CPU placement, or access design deserves separation
 ```
 
-Keep the SAS media library out of Terraform-managed VM boot disks. Terraform should create machines and attach networks/disks where appropriate; it should not become the source of truth for media files.
+Keep the SAS media library out of Terraform-managed VM boot disks. Terraform owns VM placement and disk attachment; it does not own media contents.
+
+Proxmox does not have VMware-style automatic DRS in this setup. For now the correct pattern is explicit placement variables:
+
+```hcl
+media_node_name         = "hp3"
+media_boot_storage      = "nvme-local"
+media_data_storage      = "sas-hp3"
+media_data_disk_size_gb = 4000
+```
+
+Later, we can add a small placement layer or module map so app classes choose allowed nodes/storages automatically.
 
 ## Ansible Shape
 
-Use Ansible for the OS and Docker layer. The first scaffold lives in `ansible-homelab`:
+Use Ansible for the OS and Docker layer. The scaffold lives in `ansible-homelab`:
 
 ```text
 inventory/homelab.ini
@@ -113,44 +127,40 @@ group_vars/media_secrets.yml.example
 roles/media_stack/
 ```
 
-The media playbook applies `docker_host` and `media_stack`. `media_stack` renders a Docker Compose stack for Plex, Sonarr, Radarr, Prowlarr, qBittorrent, and Overseerr.
+The media playbook applies `docker_host` and `media_stack`. `media_stack` renders a Docker Compose stack for Plex, Sonarr, Radarr, Jackett, Prowlarr, qBittorrent, Deluge, Overseerr, Ombi, and Unpackerr.
 
 Current first-boot behavior:
 
-- Use local `/mnt/media`, `/mnt/media/movies`, and `/mnt/media/tv` directories.
+- Format and mount the Terraform-attached `scsi1` disk at `/mnt/media` when `media_data_disk_enabled` is true.
 - Keep Plex claim tokens out of git in ignored `group_vars/media_secrets.yml`.
+- Keep Sonarr/Radarr API keys for Unpackerr out of git in ignored `group_vars/media_secrets.yml`.
 - Leave Cloudflare exposure out of this first pass.
 - Add the host to `telegraf_agents` so the shared monitoring playbook can deploy the agent.
 
-Future HP2 SAS mount behavior:
+Current SAS disk behavior:
 
 ```yaml
-media_create_local_library_dirs: false
-media_nfs_enabled: true
-media_nfs_src: "hp2.example:/export/media"
+media_data_disk_enabled: true
+media_data_disk_device: "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1"
+media_data_disk_fstype: "ext4"
 ```
 
-The exact HP2 export path and permissions still need to be confirmed before enabling this.
+The Ansible role only creates a filesystem when the data disk has no filesystem yet.
 
-Ansible owns:
-
-- Install Docker and Compose.
-- Create service users and directory layout.
-- Mount media storage.
-- Render Docker Compose for Plex and automation services.
-- Manage environment files outside Git.
-- Configure Telegraf so the media VM reports metrics automatically.
-
-Current app set:
+## Services
 
 | Service | Role |
 | --- | --- |
 | Plex | Playback and library server |
 | Sonarr | TV automation |
 | Radarr | Movie automation |
+| Jackett | Indexer bridge, kept for trackers/tools that still expect it |
 | Prowlarr | Indexer bridge |
 | qBittorrent | Downloads |
+| Deluge | Downloads, useful for workflows that fit Deluge better |
 | Overseerr | Request workflow |
+| Ombi | Alternative request workflow |
+| Unpackerr | Watches completed downloads and extracts rar archives for Sonarr/Radarr imports |
 
 Initial internal ports:
 
@@ -160,58 +170,60 @@ Initial internal ports:
 | `8989` | Sonarr |
 | `7878` | Radarr |
 | `9696` | Prowlarr |
+| `9117` | Jackett |
 | `8080` | qBittorrent Web UI |
+| `8112` | Deluge Web UI |
 | `5055` | Overseerr |
+| `3579` | Ombi |
 
 ## Cloudflare And Access
 
 Use Cloudflare Access for admin-facing HTTP apps:
 
 - `overseerr.lanilsen.com`
+- `ombi.lanilsen.com`
 - `sonarr.lanilsen.com`
 - `radarr.lanilsen.com`
-- `jackett.lanilsen.com` or `prowlarr.lanilsen.com`
+- `prowlarr.lanilsen.com`
+- `jackett.lanilsen.com`
 - `qbittorrent.lanilsen.com`
+- `deluge.lanilsen.com`
 
 Plex needs a separate decision. Cloudflare Tunnel may be fine for management/light access, but avoid blindly proxying heavy video traffic through Cloudflare. Prefer VPN or Plex-native remote access for streaming unless the policy and traffic profile are confirmed acceptable.
 
 ## Monitoring Expectations
 
-`media1` belongs in the Ansible `telegraf_agents` group and currently reports host metrics to the central monitoring stack. Treat these as the baseline checks before adding public exposure or migrating storage:
+`media1` belongs in the Ansible `telegraf_agents` group and reports host metrics to the central monitoring stack. Treat these as the baseline checks before adding public exposure:
 
 | Signal | Expectation |
 | --- | --- |
 | Host availability | `media1` should respond to ping and SSH from the internal management path. |
-| Docker health | Plex, Sonarr, Radarr, Prowlarr, qBittorrent, and Overseerr containers should stay running after reboot. |
+| Docker health | Plex, Sonarr, Radarr, Jackett, Prowlarr, qBittorrent, Deluge, Overseerr, Ombi, and Unpackerr containers should stay running after reboot. |
 | Disk capacity | Track `/opt/media` and `/mnt/media` usage separately so app config growth is not confused with media library growth. |
-| NFS health later | When HP2 SAS is mounted, alert on missing `/mnt/media`, stale mounts, or sudden drops in available capacity. |
-| Service reachability | Internal ports `32400`, `8989`, `7878`, `9696`, `8080`, and `5055` should be checked from the services VLAN or monitoring host. |
+| Media disk health | Alert on missing `/mnt/media`, stale mounts, or sudden drops in available capacity. |
+| Service reachability | Internal ports `32400`, `8989`, `7878`, `9696`, `9117`, `8080`, `8112`, `5055`, and `3579` should be checked from the services VLAN or monitoring host. |
 
-Application-level API keys and credentials should stay out of the documentation and out of Git. Add service-specific checks only after credentials are stored in the chosen secrets workflow.
+Application-level API keys and credentials should stay out of documentation and out of Git. Add service-specific checks only after credentials are stored in the chosen secrets workflow.
 
 ## Deployment Status
 
-Deployed on `2026-05-21`:
+Updated on `2026-05-22`:
 
 | Component | Status |
 | --- | --- |
-| Terraform VM `media1` | Created and running |
+| Terraform VM `media1` | Pinned to `hp3` |
 | VMID | `9050` |
-| IP | `10.0.0.39` |
-| Plex | Running |
-| Sonarr | Running |
-| Radarr | Running |
-| Prowlarr | Running |
-| qBittorrent | Running |
-| Overseerr | Running |
-| Telegraf | Active |
+| Boot/app disk | `nvme-local` |
+| Media disk | `sas-hp3`, mounted at `/mnt/media` |
+| Plex/Sonarr/Radarr/Jackett/Prowlarr/qBittorrent/Deluge/Overseerr/Ombi/Unpackerr | Managed by Ansible Docker Compose |
+| Telegraf | Managed by the shared monitoring playbook |
 
-The current media library path is local to the VM for bootstrapping. Move it to HP2 SAS-backed NFS once the export path and permissions are decided.
+The media library path is `/mnt/media` on the attached `sas-hp3` data disk. Treat the boot/app disk as replaceable.
 
 ## Next Implementation Steps
 
-1. Confirm the HP2 SAS volume layout, filesystem, export path, and permissions.
-2. Decide whether HP2 exports NFS directly or a storage VM owns the export.
-3. Enable the media NFS variables once the HP2 SAS export is real.
-4. Pin qBittorrent credentials through ignored Ansible secrets instead of relying on the generated temporary password.
+1. Claim Plex with a short-lived claim token if this is a fresh Plex install.
+2. Complete Sonarr/Radarr first-run setup, then store API keys in the chosen secret store and feed them to Unpackerr.
+3. Pin qBittorrent/Deluge credentials through ignored Ansible secrets instead of relying on generated defaults.
+4. Decide whether a later `plex1` should consume `/mnt/media` through NFS from `media1` or through a dedicated storage VM.
 5. Add Cloudflare DNS/Access only after the internal app works.
