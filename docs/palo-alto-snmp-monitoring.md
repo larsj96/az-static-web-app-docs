@@ -9,10 +9,19 @@ Palo Alto SNMP -> monitoring1 Telegraf -> InfluxDB -> Grafana
 Live polling target:
 
 ```text
-10.1.1.65  pa510-homelab-ljn in-band interface
+10.1.1.3  pa510-homelab-ljn in-band/API interface
 ```
 
-The dedicated management address is useful for HTTPS/API work, but SNMP is currently answering on the in-band/dataplane interface where the Terraform-managed interface management profile allows SNMP.
+The dedicated management address in the running Palo config is `10.1.1.2/27`, but SNMP is currently answering on `10.1.1.3`, which is also reachable for HTTPS/API work.
+
+On `2026-05-22`, SNMP was explicitly enabled on the Palo management-plane service config and committed through the XML API. A live test from `monitoring1` succeeded:
+
+```text
+snmpget -v2c 10.1.1.3 1.3.6.1.2.1.1.3.0
+Timeticks returned successfully
+```
+
+The previous target `10.1.1.65` is not reachable and should not be used until it is intentionally restored.
 
 ## Terraform-Managed Palo Alto Settings
 
@@ -79,6 +88,8 @@ Start with numeric OIDs in Telegraf so the container does not need MIB files:
 Live verified fields include `PanSystem` uptime, PAN-OS software version, HA state, active TCP/UDP/ICMP sessions, interface descriptions/status/octet counters, host CPU load indexes, and fan readings.
 
 The route from `monitoring1` to the Palo site depends on the Fortigate-to-VPS and Palo-to-VPS hub path. `monitoring1` sends traffic to the Fortigate gateway, Fortigate routes `10.1.0.0/16` over `to-hostinger`, and the VPS forwards it into the Palo IPsec selector.
+
+Important selector rule: the Palo-to-VPS stack must include both `10.8.0.0/24` and `10.0.0.0/16` as remote subnets. `10.8.0.0/24` is for VPS/OpenVPN-originated traffic; `10.0.0.0/16` is for Fortigate-side monitoring and log hosts crossing the VPS hub toward Palo. Avoid overlapping IPv4 and IPv6 Palo tunnels with the same inner IPv4 selectors unless xfrm policy preference is controlled.
 
 Next dashboard candidates after the first walk:
 

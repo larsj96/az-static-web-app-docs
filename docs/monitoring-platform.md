@@ -1,4 +1,4 @@
-# Monitoring Platform
+﻿# Monitoring Platform
 
 ## Goal
 
@@ -8,6 +8,7 @@ Build a central monitoring platform that is managed like the rest of the homelab
 - cloud-init gives it the standard Ubuntu baseline and SSH keys.
 - Ansible installs Docker and deploys the monitoring stack.
 - Ansible installs Telegraf on monitored servers.
+- Ansible installs Filebeat on the same host group for centralized system/audit log shipping.
 - Metrics go to InfluxDB.
 - Grafana is the primary dashboard front end.
 - Syslog/audit/application logs go to OpenSearch through Logstash.
@@ -48,8 +49,6 @@ Fortigate DHCP assigned `10.0.0.38`, and the QEMU guest agent reports that addre
 flowchart LR
   agents["Telegraf agents\nservers and VMs"] --> influx["InfluxDB 2.x\nbucket homelab"]
   active["Telegraf active checks\nping + x509"] --> influx
-  pve["Proxmox API polling\nhp1 hp2 hp3"] --> influx
-  snmp["SNMP polling\niLO Fortigate Palo Alto"] --> influx
   influx --> grafana["Grafana\nprimary dashboards"]
   influx --> chrono["Chronograf"]
   influx --> kap["Kapacitor"]
@@ -72,6 +71,8 @@ When a new Terraform VM is added, add it to `telegraf_agents` after the first bo
 2. Fortigate DHCP reservation gives the VM a stable IP.
 3. Add the host to Ansible inventory.
 4. Run `ansible-playbook playbooks/monitoring.yml`.
+
+`log_shipper_agents` is a child group of `telegraf_agents`, so all hosts in that host list receive Filebeat by default.
 
 ## Active Remote Checks
 
@@ -111,30 +112,90 @@ https://10.0.124.167:443
 
 | Device class | Current targets | Current method |
 | --- | --- | --- |
-| Proxmox management | `10.0.0.162`, `10.0.0.163`, `10.0.0.164`, `10.0.0.165` | Telegraf Proxmox API input, ping, Proxmox web certificate check on `10.0.0.162` |
-| HP iLO | `10.0.124.165`, `10.0.124.163` | SNMPv2 polling through Telegraf |
-| HP iLO pending | `10.0.124.164` | Currently times out on UDP/161; enable after hp1 iLO SNMP is fixed |
-| Fortigate | `10.0.0.33` | SNMPv2 polling through Telegraf |
-| Palo Alto | `10.1.1.65` | SNMPv2 polling through Telegraf over the Palo/Fortigate hub route |
+| Proxmox management | `10.0.0.162`, `10.0.0.163`, `10.0.0.164`, `10.0.0.165` | Ping, Proxmox web certificate check on `10.0.0.162` |
+| HP iLO | `10.0.124.165`, `10.0.124.166`, `10.0.124.167` | Ping and HTTPS certificate checks |
+| Fortigate | `10.0.0.33`, `10.0.0.161` | Ping |
+| Palo Alto | `10.1.1.3` | SNMPv2 polling through Telegraf |
 
-SNMP is enabled in Ansible and uses the ignored monitoring secrets file for the community:
+SNMP is enabled for confirmed device targets:
 
 ```yaml
 monitoring_snmp_enabled: true
 monitoring_snmp_community: "{{ snmp_community | default('') }}"
 ```
 
-After changing targets or secrets, rerun the monitoring stack from `bastion01`:
+The community belongs in the ignored `group_vars/monitoring_secrets.yml`. After changing targets or secrets, rerun:
 
 ```bash
 ansible-playbook playbooks/monitoring.yml
 ```
 
-Current SNMP collection includes generic system identity/uptime, interface counters, HP iLO health OIDs, Fortigate system/interface OIDs, and Palo Alto PAN-OS session/interface/CPU/fan OIDs.
+Palo Alto SNMP was fixed on `2026-05-22` by enabling the management-plane SNMP service and moving Telegraf from the stale `10.1.1.65` target to `10.1.1.3`. Live samples now include `PanSystem` fields such as `UpTime`, `PanSysSwVersion`, `PanSessionActiveTcp`, interface descriptions/status, fan values, and CPU load fields.
 
-Proxmox metrics are currently collected by Telegraf through the Proxmox API. The measurement is `proxmox`, and live samples include VM status, CPU load, uptime, disk totals, disk used, and disk used percentage. This is the working source of truth today and feeds the `Proxmox VE Homelab` Grafana dashboard.
+## Cloudflare Metrics
 
-Proxmox's native Datacenter metric server is not configured yet. The currently pinned `bpg/proxmox` provider in `terraform-proxmox/proxmox-core` does not support that resource, so the repo keeps `metrics.tf.example` as a future-provider-upgrade note rather than active Terraform.
+Cloudflare can be added as an extra data source in the same stack by running a Prometheus-style exporter next to Telegraf and scraping it into InfluxDB.
+
+The implementation in this repo uses the [lablabs/cloudflare-exporter](https://github.com/lablabs/cloudflare-exporter):
+
+- In `docker-compose.yml`, Ansible creates `cloudflare-exporter` when `monitoring_cloudflare_enabled: true`.
+- Telegraf adds a `[[inputs.prometheus]]` scrape on `http://cloudflare-exporter:{{ monitoring_cloudflare_container_port }}/metrics`.
+- Scraped metrics are written by Telegraf into the existing InfluxDB bucket (`homelab` by default).
+- Grafana gets a provisioning template at `roles/monitoring_stack/templates/grafana-dashboard-cloudflare.json.j2`.
+
+This design keeps your current stack intact (InfluxDB + Grafana) and avoids introducing a separate Prometheus installation.
+
+### Enabling it
+
+In `group_vars/monitoring.yml`:
+
+```yaml
+monitoring_cloudflare_enabled: true
+monitoring_cloudflare_accounts:
+  - "ACCOUNT_ID-1"
+monitoring_cloudflare_zones:
+  - "ZONE_ID-1"
+monitoring_cloudflare_excluded_zones: []
+```
+
+In `group_vars/monitoring_secrets.yml` (vault-managed), set:
+
+```text
+cloudflare_api_token: "<token-with-analytics-permissions>"
+```
+
+Then deploy:
+
+```bash
+ansible-playbook playbooks/monitoring.yml --ask-vault-pass
+```
+
+### Token scopes
+
+The exporter documentation requires these minimum permissions for broad zone data:
+
+- `Zone / Analytics:Read`
+- `Account / Account Analytics:Read` (if you enable account-level metrics)
+
+Optional scopes are required for optional metric families:
+
+- `Zone / Firewall Services:Read` (to enrich firewall metrics names)
+- `Account / Account Settings:Read` (required for listing accessible accounts when worker/account metrics are enabled)
+- Any additional Cloudflare product permissions your selected dashboard requires (Workers, Load Balancing, API Gateway, etc.).
+
+For Free zones, GraphQL analytics visibility is reduced:
+
+- Only a subset of metrics are available; the exporter marks skipped zones with `cloudflare_zones_skipped_free_tier`.
+
+### Collection approach and alternatives
+
+This stack uses `lablabs/cloudflare-exporter`, which is a maintained open-source Prometheus exporter backed by Cloudflare GraphQL + REST APIs.
+
+An alternative is Cloudflare's official Worker-based exporter (`cloudflare-prometheus-exporter`), which is also supported by Cloudflare docs and pushes data in Prometheus format.
+
+Both fit the same scrape pattern (`/metrics` to Telegraf -> InfluxDB -> Grafana), so the dashboard/provisioning layer can stay the same if you later swap collectors.
+
+The first SNMP collection uses generic `SNMPv2-MIB` and `IF-MIB` data: system name, uptime, interface names, interface status, and in/out octets. Later we can add richer device-specific collection with HP iLO Redfish/IPMI exporter, Fortigate SNMP OIDs, or a Prometheus exporter if we want deeper dashboards.
 
 ## Logs Pipeline
 
@@ -145,7 +206,7 @@ Use OpenSearch instead of Elastic licensing-sensitive packages for the first Doc
 ```mermaid
 flowchart LR
   syslog["Syslog / audit logs"] --> logstash["Logstash\n5044 beats\n5514 syslog"]
-  beats["Future Filebeat/Auditbeat"] --> logstash
+  beats["Filebeat (system + audit)"] --> logstash
   logstash --> os["OpenSearch"]
   os --> grafana["Grafana\nlog views"]
   os --> dash["OpenSearch Dashboards"]
@@ -180,6 +241,7 @@ New roles/playbook:
 roles/docker_host/
 roles/monitoring_stack/
 roles/telegraf_agent/
+roles/log_shipper/
 playbooks/monitoring.yml
 ```
 
@@ -206,7 +268,7 @@ opensearch_initial_admin_password
 grafana_admin_password
 ```
 
-Later, move this into Ansible Vault when the workflow settles.
+Keep this file encrypted with Ansible Vault; share generated access secrets only through Vaultwarden as needed.
 
 ## Terraform And Cloud-Init Contract
 
@@ -226,7 +288,7 @@ Do not pack full monitoring configuration into cloud-init. Keep cloud-init as th
 ## Next Steps
 
 1. Add Grafana data sources and first dashboards.
-2. Add Filebeat/Auditbeat or syslog forwarding after metrics are stable.
+2. Expand Filebeat parsing coverage as more host services are added (Docker, SSH, nginx, etc.).
 3. Point Fortigate, Proxmox, and key Linux syslog toward `10.0.0.38:5514`.
 4. Decide whether dashboards should stay VPN-only or be protected by Cloudflare Access.
 5. Add the Dell iDRAC management IP when confirmed.
@@ -252,9 +314,8 @@ Deployed on `2026-05-21`:
 | Telegraf on `media1` | Active |
 | Grafana InfluxDB datasource | Provisioned |
 | Grafana OpenSearch datasource | Provisioned |
-| Proxmox API metrics | Active through Telegraf for hp1, hp2, hp3, and dell1 |
-| iLO/Fortigate/Palo Alto SNMP | Active for confirmed targets |
-| hp1 iLO SNMP | Pending; UDP/161 currently times out |
+| iLO/Fortigate/Proxmox active checks | Configured on central Telegraf |
+| SNMP collection | Active for confirmed iLO, Fortigate, and Palo Alto targets |
 
 ## Grafana Public Access Option
 
