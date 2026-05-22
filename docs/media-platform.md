@@ -212,17 +212,34 @@ ansible-playbook playbooks/media.yml
 
 Initial internal ports:
 
-| Port | Service |
-| ---: | --- |
-| `32400` | Plex |
-| `8989` | Sonarr |
-| `7878` | Radarr |
-| `9696` | Prowlarr |
-| `9117` | Jackett |
-| `8080` | qBittorrent Web UI |
-| `8112` | Deluge Web UI |
-| `5055` | Overseerr |
-| `3579` | Ombi |
+| Service | Internal URL | Notes |
+| --- | --- | --- |
+| Plex | `http://10.0.0.39:32400/web` | Runs with Docker host networking. |
+| Sonarr | `http://10.0.0.39:8989` | TV automation. Add Deluge as download client and sync indexers from Prowlarr. |
+| Radarr | `http://10.0.0.39:7878` | Movie automation. Add Deluge as download client and sync indexers from Prowlarr. |
+| Prowlarr | `http://10.0.0.39:9696` | Primary indexer manager. Configure IPTorrents here first, then sync to Sonarr/Radarr. |
+| Jackett | `http://10.0.0.39:9117` | Legacy indexer bridge, kept for compatibility. |
+| qBittorrent | `http://10.0.0.39:8080` | Available, but Deluge is the preferred first downloader for this stack. |
+| Deluge | `http://10.0.0.39:8112` | Preferred download client. Default LinuxServer Deluge Web UI password is usually `deluge`; change it and store it in Vault. |
+| Overseerr | `http://10.0.0.39:5055` | Request workflow option. |
+| Ombi | `http://10.0.0.39:3579` | Alternative request workflow option. |
+
+Downloader paths:
+
+| Container path | Host path | Purpose |
+| --- | --- | --- |
+| `/downloads` | `/opt/media/downloads` | Shared downloader/import staging path. |
+| `/downloads/completed` | `/opt/media/downloads/completed` | Completed download/extraction handoff path. |
+| `/movies` | `/mnt/media/movies` | Plex/Radarr movie library. |
+| `/tv` | `/mnt/media/tv` | Plex/Sonarr TV library. |
+
+Prowlarr/IPTorrents setup model:
+
+1. Open Prowlarr at `http://10.0.0.39:9696`.
+2. Add IPTorrents as an indexer using the tracker credentials/API details from IPTorrents.
+3. Add Sonarr and Radarr as Prowlarr applications using their API keys.
+4. Add Deluge as the download client in Sonarr/Radarr.
+5. Store Sonarr/Radarr API keys and any tracker/download credentials in Vault, not Git.
 
 ## Cloudflare And Access
 
