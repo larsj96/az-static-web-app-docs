@@ -60,6 +60,7 @@ nav:
   - Infrastructure As Code:
       - Operating Model: iac-operating-model.md
       - Terraform State: terraform-cloud-state.md
+      - Secrets Management: secrets-management.md
       - Repository Split: repo-split-plan.md
       - Palo Alto Terraform: palo-alto-terraform.md
       - Palo GlobalProtect Remote Access: palo-globalprotect-remote-access.md

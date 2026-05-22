@@ -191,7 +191,7 @@ Avoid one giant state for everything. It makes credentials, blast radius, and de
 
 ## Secrets
 
-Use environment variables, ignored tfvars files, or CI secrets for:
+Use HashiCorp Vault as the preferred automation secret store once it is deployed. Until then, use environment variables, ignored tfvars files, or CI secrets for:
 
 - Proxmox API tokens
 - Fortigate API tokens
@@ -199,3 +199,13 @@ Use environment variables, ignored tfvars files, or CI secrets for:
 - SSH private keys, if Terraform must provision VMs directly
 
 Do not commit `terraform.tfvars` files containing secrets.
+
+For generated app credentials, prefer this flow:
+
+```text
+Terraform random_password
+  -> Vault KV secret
+  -> Ansible renders service config
+```
+
+Do not expose generated passwords as Terraform outputs except temporary one-time bootstrap situations.

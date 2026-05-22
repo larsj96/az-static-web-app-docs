@@ -8,6 +8,7 @@ The homelab should use both Terraform and Ansible.
 - Fortigate/Palo Alto network objects, VLANs, policies, NAT, and VPN where providers are reliable
 - Cloudflare DNS, tunnels, Access applications, and identity providers
 - Remote state backend configuration per stack
+- Random service credential generation when a stack needs a bootstrap password
 
 ## Ansible Owns
 
@@ -18,6 +19,15 @@ The homelab should use both Terraform and Ansible.
 - docs platform deploys
 - monitoring agents
 - routine Proxmox host checks
+- reading automation secrets from Vault and writing service `.env` or config files
+
+## Secrets Contract
+
+Generated service credentials should not live in chat, Terraform outputs, or committed files. Use HashiCorp Vault as the automation secret store and Bitwarden/Vaultwarden for human break-glass secrets.
+
+For example, when a future Plex, Grafana, Ombi, Sonarr, or Radarr stack needs an initial password, Terraform should generate it with `random_password`, write it to Vault, and avoid exposing it as a normal output. Ansible then reads the value from Vault when rendering Docker Compose `.env` files.
+
+See [Secrets Management](secrets-management.md).
 
 ## Do Not Force Everything Into One Tool
 
@@ -138,7 +148,7 @@ Important implementation notes:
 Run Ansible from `bastion01` because it has SSH access to service VMs:
 
 ```bash
-ssh ubuntu@10.0.0.99
+ssh ubuntu@10.0.0.102
 cd ~/ansible-homelab
 git pull
 ansible-playbook playbooks/mkdocs.yml

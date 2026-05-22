@@ -10,9 +10,9 @@ The docs platform is now self-hosted in the homelab and published online.
 | Public protection | Cloudflare Access with One-time PIN |
 | Allowed emails | `larsj96@gmail.com`, `jaguni@gmail.com` |
 | Origin VM | `mkdocs`, VMID `9020` |
-| Origin IP | `10.0.0.37` on VLAN 12 / `fortigate_onprem_k8s` |
+| Origin IP | `10.0.0.35` on VLAN 12 / `fortigate_onprem_k8s` |
 | Web server | Nginx serving static MkDocs output |
-| Control host | `bastion01`, `10.0.0.99` |
+| Control host | `bastion01`, `10.0.0.102` |
 | Source repo | `larsj96/az-static-web-app-docs` |
 | Deploy repo | `larsj96/Ansible` |
 | Public ingress repo | `larsj96/terraform_cloudfare` |
@@ -42,7 +42,7 @@ The role installs Nginx, creates a Python virtual environment, installs MkDocs a
 ```mermaid
 flowchart LR
   repo["GitHub\naz-static-web-app-docs"] --> ansible["Ansible from bastion01"]
-  ansible --> vm["mkdocs VM\n10.0.0.37"]
+  ansible --> vm["mkdocs VM\n10.0.0.35"]
   vm --> nginx["Nginx\n/srv/mkdocs/site"]
   cf["Cloudflare Tunnel\nhomelab-docs"] --> vm
   user["User"] --> access["Cloudflare Access\nOTP"]

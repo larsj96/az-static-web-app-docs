@@ -18,8 +18,8 @@ Future Codex sessions should read `AGENTS.md` in the local Homelab workspace fir
 | Area | Current state |
 | --- | --- |
 | Proxmox | HP cluster is healthy after removing `dell1`; Terraform-managed VMs run on `hp1` with `nvme-local` storage. |
-| Bastion | `bastion01` is live on VLAN 14 at `10.0.0.99` and is the Ansible control/jump host. |
-| Docs VM | `mkdocs` is live on VLAN 12 at `10.0.0.37`, built by Ansible from this repo. |
+| Bastion | `bastion01` is live on VLAN 14 at `10.0.0.102` and is the Ansible control/jump host. |
+| Docs VM | `mkdocs` is live on VLAN 12 at `10.0.0.35`, built by Ansible from this repo. |
 | Public docs | `https://docs.lanilsen.com/` is published by Cloudflare Tunnel and protected by Cloudflare Access. |
 | Terraform state | Proxmox, Cloudflare docs, and Palo Alto stacks use Cloudflare R2 bucket `lanilsen-terraform-state`. |
 | Automation model | Terraform creates infrastructure; cloud-init bootstraps guests; Ansible configures services. |
@@ -42,6 +42,7 @@ See [Terraform State](terraform-cloud-state.md) for the recommended state split.
 - [Network Model](network-model.md)
 - [Terraform State](terraform-cloud-state.md)
 - [Infrastructure As Code Operating Model](iac-operating-model.md)
+- [Secrets Management](secrets-management.md)
 - [Storage Plan](storage-plan.md)
 - [Proxmox And Ceph Plan](proxmox-ceph-plan.md)
 - [Self-Hosted Docs Platform](self-hosted-docs-platform.md)
