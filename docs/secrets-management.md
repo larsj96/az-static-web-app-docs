@@ -57,6 +57,30 @@ resource "vault_kv_secret_v2" "grafana_admin" {
 
 Ansible can then read the secret during deployment and write `.env` files or app config on the target VM.
 
+## Live Vault Deployment
+
+Vault is deployed internally on `docker1`.
+
+| Item | Value |
+| --- | --- |
+| Host | `docker1` |
+| IP | `10.0.0.37` |
+| URL | `http://10.0.0.37:8200` |
+| Exposure | Internal only. No Cloudflare Tunnel. |
+| Storage | Integrated raft storage under `/opt/vault/data` |
+| Init material | `/opt/vault/init/vault-init.json` on `docker1`, root-only |
+| KV mount | `homelab` |
+| Bootstrap policy | `homelab-automation` |
+
+Deployment is managed from `bastion01` with:
+
+```bash
+cd ~/ansible-homelab
+ansible-playbook playbooks/vault.yml
+```
+
+The first run initializes Vault with 5 unseal key shares and a threshold of 3, then unseals the instance and enables the `homelab` KV v2 mount.
+
 ## Docker Hosting
 
 Vault can run on `docker1` first as a Docker Compose service, but it must be treated as critical infrastructure:
@@ -64,8 +88,8 @@ Vault can run on `docker1` first as a Docker Compose service, but it must be tre
 - Persist Vault data on durable storage.
 - Back up the Vault data directory and unseal/recovery material.
 - Keep unseal/recovery keys in Bitwarden/Vaultwarden, not only in the lab.
-- Protect the UI/API with Cloudflare Access or VPN-only policy.
-- Use TLS, even internally.
+- Keep the UI/API internal-only or VPN-only. Do not publish Vault with Cloudflare Tunnel.
+- Add internal TLS later before Terraform/Ansible starts using Vault heavily.
 
 For lab momentum, start with a single Vault container on `docker1`. Later, move it to a dedicated `secrets1` VM or highly available storage if it becomes a dependency for bootstrapping everything else.
 
@@ -80,6 +104,16 @@ Keep these outside Vault as break-glass material:
 - One firewall emergency admin path.
 - R2 backend credentials or a recovery copy.
 - A documented restore procedure.
+
+Current recovery command to inspect the init material on `docker1`:
+
+```bash
+ssh ubuntu@10.0.0.102
+ssh ubuntu@10.0.0.37
+sudo cat /opt/vault/init/vault-init.json
+```
+
+That file contains sensitive material. Move a recovery copy into Bitwarden/Vaultwarden and keep file permissions at `0600 root:root`.
 
 ## VM Onboarding Contract
 
