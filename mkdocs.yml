@@ -61,6 +61,7 @@ nav:
       - Terraform State: terraform-cloud-state.md
       - Repository Split: repo-split-plan.md
       - Palo Alto Terraform: palo-alto-terraform.md
+      - Palo GlobalProtect Remote Access: palo-globalprotect-remote-access.md
       - Implementation Roadmap: implementation-roadmap.md
   - Services:
       - Self-Hosted Docs Platform: self-hosted-docs-platform.md
@@ -69,3 +70,4 @@ nav:
       - Cloudflare Tunnel And Plex: cloudflare-tunnel-plex.md
   - Operations:
       - Frankfurt VPS Ops Hub: frankfurt-vps-ops-hub.md
+      - Palo Alto SNMP Monitoring: palo-alto-snmp-monitoring.md

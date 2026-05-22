@@ -99,6 +99,32 @@ http=200 remote=10.0.0.162
 container_http=200 remote=10.0.0.162
 ```
 
+## Palo GlobalProtect Transit
+
+GlobalProtect clients terminate on the Palo Alto cabin firewall, but the VPS is still part of the path when those clients reach Mo i Rana networks:
+
+```text
+GlobalProtect client 172.31.250.0/24
+  -> Palo Alto NAT to 10.1.255.250
+  -> Palo-to-VPS IPsec
+  -> Frankfurt VPS
+  -> VPS SNAT to 10.8.0.1
+  -> Fortigate IPsec
+  -> 10.0.0.0/16
+```
+
+The VPS SNAT is deliberate. The Fortigate-side selector expects `10.8.0.0/24 -> 10.0.0.0/16`, so Palo-originated transit traffic must arrive at the Fortigate tunnel as `10.8.0.1`.
+
+Current nftables/iptables intent:
+
+```text
+10.1.0.0/16 -> 10.0.0.0/16 SNAT to 10.8.0.1
+10.8.0.0/24 -> 10.0.0.0/16 accepted into Fortigate tunnel
+10.0.0.0/16 -> 10.8.0.0/24 accepted back
+```
+
+Do not remove this while the Fortigate selectors stay scoped to the VPS transit subnet. If the Fortigate tunnel is later widened to include the Palo networks directly, document that as a deliberate migration.
+
 Initial setup command, if rebuilding:
 
 ```bash

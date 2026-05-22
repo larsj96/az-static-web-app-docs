@@ -38,6 +38,44 @@ Future tunnel direction:
 - test IPv6 IPsec directly between Palo Alto and Fortigate
 - add WireGuard outbound as an automation fallback if needed
 
+GlobalProtect is now the external remote-access path into the Palo Alto site. It is published directly over Starlink IPv6:
+
+```text
+gp.lanilsen.com AAAA 2a0d:3341:bb9c:af01::443
+listener interface loopback.12
+listener zone gp-public
+client tunnel tunnel.12
+client zone gp-clients
+client pool 172.31.250.0/24
+client route 0.0.0.0/0
+```
+
+Cloudflare must stay DNS-only for `gp.lanilsen.com`; do not proxy GlobalProtect through Cloudflare.
+
+Internet egress for connected clients:
+
+```text
+172.31.250.0/24
+  -> Palo rule gp-clients-to-internet
+  -> Palo NAT nat-gp-clients-to-starlink
+  -> ethernet1/1 / wan-starlink
+```
+
+Mo i Rana access through the VPS hub:
+
+```text
+172.31.250.0/24
+  -> Palo rule gp-clients-to-vps-hub
+  -> Palo NAT nat-gp-clients-to-vps-hub, translated source 10.1.255.250
+  -> Palo tunnel.10 / vpn-vps
+  -> Frankfurt VPS
+  -> VPS SNAT to 10.8.0.1
+  -> Fortigate IPsec
+  -> 10.0.0.0/16
+```
+
+This NAT chain exists because the established IPsec selectors are not `172.31.250.0/24` aware. If a GlobalProtect client can connect and Palo logs show allowed `172.31.250.1 -> 10.0.0.x` sessions that age out as `app=incomplete`, check `nat-gp-clients-to-vps-hub` and the VPS SNAT rules first.
+
 ## Management Boundary
 
 The old Proxmox management network should remain reachable only from trusted local/admin paths. Since `192.168.13.0/24` is intentionally not routed across the VPN, Terraform execution against Proxmox uses the routed VLAN 16 addresses instead.
