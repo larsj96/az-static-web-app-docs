@@ -6,15 +6,59 @@ Use the existing `monitoring1` stack in `larsj96/Ansible` for Palo Alto metrics:
 Palo Alto SNMP -> monitoring1 Telegraf -> InfluxDB -> Grafana
 ```
 
-## Required Palo Alto Settings
+## Terraform-Managed Palo Alto Settings
 
-- Configure SNMP statistics polling under `Device > Setup > Operations > SNMP Setup`.
+The Palo Alto in-band management profile is managed in:
+
+```text
+terraform-palo/live/homelab/network-base
+```
+
+Terraform now owns the dataplane/interface exposure needed for SNMP polling:
+
+- `panos_interface_management_profile.inband`
+- `snmp = true`
+- optional `permitted_ips` allow-list
+- attachment to inside interfaces where `allow_inband_mgmt = true`
+
+Current intended allow-list:
+
+```text
+10.0.0.38/32   monitoring1 Telegraf SNMP polling
+10.0.0.100/32  mgmt1 workbench
+10.0.0.102/32  bastion01
+10.1.1.0/27    local infra/admin VLAN
+```
+
+The Terraform variables are:
+
+```hcl
+management_profile_services = ["https", "ssh", "ping", "snmp"]
+management_profile_permitted_ips = [
+  "10.0.0.38/32",
+  "10.0.0.100/32",
+  "10.0.0.102/32",
+  "10.1.1.0/27",
+]
+```
+
+Run from a host that can reach the Palo Alto management API:
+
+```bash
+cd /mnt/c/github/terraform-palo/live/homelab/network-base
+terraform plan
+terraform apply
+```
+
+## Remaining Palo Alto Settings
+
+- Configure SNMP statistics polling under `Device > Setup > Operations > SNMP Setup` if it is not already present.
 - Use SNMPv3 where possible: `authPriv`, SHA authentication, AES privacy.
-- Enable SNMP on the interface that `monitoring1` can reach:
-  - MGT interface: enable SNMP on the management interface settings.
-  - Dataplane interface: create and attach an interface management profile with SNMP enabled.
+- Prefer polling the Terraform-managed in-band/dataplane interface instead of the dedicated MGT interface when possible.
 - Confirm `monitoring1` (`10.0.0.38`) can reach the chosen Palo Alto address on UDP/161.
 - Add firewall/security policy only if the monitoring path crosses zones. If polling the Palo Alto MGT interface directly, PAN-OS SNMP enablement is the key control; if polling through dataplane zones, policy may be required.
+
+Provider note: the PAN-OS Terraform provider exposes interface management profile SNMP cleanly. A first-class provider resource for the global SNMP setup/user was not available in the local provider schema used here, so that part remains a separate follow-up unless we manage it through a lower-level API/tool.
 
 ## Metrics Approach
 
