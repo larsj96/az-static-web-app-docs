@@ -218,7 +218,17 @@ Updated on `2026-05-22`:
 | Plex/Sonarr/Radarr/Jackett/Prowlarr/qBittorrent/Deluge/Overseerr/Ombi/Unpackerr | Managed by Ansible Docker Compose |
 | Telegraf | Managed by the shared monitoring playbook |
 
+Verified after rebuild:
+
+```text
+media1 IP: 10.0.0.39
+/mnt/media: /dev/sdb ext4, 3.9T usable, backed by sas-hp3
+/opt/media: boot/app disk, about 116G usable
+```
+
 The media library path is `/mnt/media` on the attached `sas-hp3` data disk. Treat the boot/app disk as replaceable.
+
+Operational note: `local` Proxmox storage is node-local. When a VM is pinned to `hp3`, the Ubuntu cloud image and cloud-init snippet must also exist on `hp3` local storage, or the VM create/start can fail even though the same volume ID works on `hp1`.
 
 ## Next Implementation Steps
 
