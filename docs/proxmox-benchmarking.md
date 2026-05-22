@@ -137,3 +137,50 @@ Do not commit raw benchmark results unless there is a specific reason. Summarize
 - Keep the same storage ID (`nvme-local`) when comparing HP nodes.
 - Re-run this before and after Ceph so the difference is measured, not guessed.
 - If a benchmark VM gets a new DHCP address, update only `inventory/benchmarks.ini`; the Terraform stack should stay reusable.
+
+## Run Log
+
+### 2026-05-22 hp-nvme-baseline-01
+
+Purpose: first baseline for HP nodes on local `nvme-local` before Ceph work.
+
+Terraform:
+
+- Stack: `terraform-proxmox/proxmox-bench`
+- State key: `terraform-proxmox/proxmox-bench/terraform.tfstate`
+- VMs: `bench-hp1`, `bench-hp2`, `bench-hp3`
+- VLAN: 12
+- Disk: 100 GiB per VM on `nvme-local`
+
+Runtime overrides:
+
+```text
+benchmark_cpu_seconds=60
+benchmark_memory_seconds=60
+benchmark_fio_runtime=60
+benchmark_fio_size=4G
+```
+
+Observed DHCP:
+
+| VM | Node | IP |
+| --- | --- | --- |
+| `bench-hp1` | `hp1` | `10.0.0.41` |
+| `bench-hp2` | `hp2` | `10.0.0.43` |
+| `bench-hp3` | `hp3` | `10.0.0.42` |
+
+Results:
+
+| Host | Node | vCPU | RAM MB | CPU eps | Mem MiB/s | Seq read MiB/s | Seq write MiB/s | 4k rand read IOPS | 4k rand write IOPS | 70/30 read IOPS | 70/30 write IOPS |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench-hp1` | `hp1` | 4 | 7941 | 4622 | 3367 | 2991 | 741 | 166336 | 82464 | 109546 | 46964 |
+| `bench-hp2` | `hp2` | 4 | 7941 | 4273 | 696 | 1242 | 635 | 175694 | 76835 | 109198 | 46813 |
+| `bench-hp3` | `hp3` | 4 | 7941 | 4767 | 3083 | 837 | 766 | 201457 | 162873 | 138788 | 59488 |
+
+Notes from the first run:
+
+- `hp1` had the strongest sequential read result in this run.
+- `hp3` had the strongest random write and mixed random result in this run.
+- `hp2` memory throughput looked unusually low compared with the other two nodes, so repeat this test before treating that as a durable finding.
+- The first apply hit Proxmox API task-status timeouts on `hp2`/`hp3`; the VMs existed and were imported/reconciled into Terraform state before rerunning apply.
+- The first Ansible collection exposed a role bug where fio work files were archived before cleanup. The role now removes fio work files before creating the result archive.
