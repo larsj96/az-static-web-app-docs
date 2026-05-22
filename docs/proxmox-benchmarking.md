@@ -82,6 +82,7 @@ Default test profile:
 | Random read | `fio`, 4 KiB block size, 4 jobs, iodepth 32, 180 seconds |
 | Random write | `fio`, 4 KiB block size, 4 jobs, iodepth 32, 180 seconds |
 | Mixed random | `fio`, 4 KiB block size, 70 percent read, 180 seconds |
+| Network | `iperf3` client to the selected `iperf_servers` inventory host |
 
 This is intentionally heavier than a smoke test. For quick validation, override the runtimes.
 
@@ -108,6 +109,15 @@ Then run from a host that can SSH to the benchmark VMs:
 ```bash
 ansible-playbook -i inventory/benchmarks.ini playbooks/benchmarks.yml
 ```
+
+The benchmark inventory can include an iperf server host:
+
+```ini
+[iperf_servers]
+bench-hp1
+```
+
+Each benchmark VM except the selected server runs an `iperf3` client test and stores `iperf3.json` in the result archive.
 
 Quick smoke test:
 
@@ -140,6 +150,7 @@ Each archive contains:
 - `sysbench-cpu.txt`
 - `sysbench-memory.txt`
 - `fio-*.json`
+- `iperf3.json` when an iperf server is configured
 
 Do not commit raw benchmark results unless there is a specific reason. Summarize important runs in this document or in a dedicated dated run note.
 
