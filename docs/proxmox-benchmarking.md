@@ -31,6 +31,8 @@ Default temporary VMs:
 
 The VMs are disposable. They should be destroyed after each benchmark run unless you are actively comparing several runs.
 
+The live default map deploys the three HP targets. Dell is documented and kept in `benchmark-vms-with-dell.tfvars.example`, but should only be enabled when Dell is rejoined cleanly or managed as its own standalone Proxmox target. Current state observed from the APIs: the HP cluster does not list `dell1`, and Dell's own API reports an unhealthy/unknown node view.
+
 Prerequisite:
 
 ```text
