@@ -51,6 +51,7 @@ plugins:
 
 nav:
   - Home: README.md
+  - Launchpad: homelab-launchpad.md
   - Architecture:
       - Overview: architecture.md
       - Network Model: network-model.md
