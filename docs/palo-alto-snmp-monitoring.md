@@ -87,6 +87,46 @@ Start with numeric OIDs in Telegraf so the container does not need MIB files:
 
 Live verified fields include `PanSystem` uptime, PAN-OS software version, HA state, active TCP/UDP/ICMP sessions, interface descriptions/status/octet counters, host CPU load indexes, and fan readings.
 
+On `2026-05-22`, the monitoring stack was extended with a Panograf-style collector inspired by [`stealthllama/panograf`](https://github.com/stealthllama/panograf), but adapted for the existing InfluxDB 2 / Flux datasource instead of the original InfluxQL dashboard model.
+
+The live Telegraf collector now writes these PAN-OS measurements:
+
+```text
+pan_system
+pan_zone
+pan_vsys
+pan_buffers
+pan_global_counters
+pan_dos
+pan_drop
+```
+
+The new Grafana dashboard is provisioned by Ansible as:
+
+```text
+Palo Alto PAN-OS Panograf
+uid: paloalto-panograf-homelab
+source: larsj96/Ansible roles/monitoring_stack/templates/grafana-dashboard-paloalto-panograf.json.j2
+```
+
+Live verification from `monitoring1` showed fresh Influx samples for CPU load, active sessions, VSYS sessions, zone CPS, packet/storage buffers, global counters, DoS counters, and drop counters from:
+
+```text
+agent_host=10.1.1.3
+device=pa510-homelab-ljn
+```
+
+If the dashboard looks empty, first verify the collector path:
+
+```bash
+ssh -J root@72.61.95.150 ubuntu@10.0.0.38
+cd /opt/monitoring
+sudo docker compose ps telegraf grafana
+sudo docker compose logs --tail=80 telegraf
+```
+
+Then query Influx for the new measurement names before assuming Grafana is broken.
+
 The route from `monitoring1` to the Palo site depends on the Fortigate-to-VPS and Palo-to-VPS hub path. `monitoring1` sends traffic to the Fortigate gateway, Fortigate routes `10.1.0.0/16` over `to-hostinger`, and the VPS forwards it into the Palo IPsec selector.
 
 Important selector rule: the Palo-to-VPS stack must include both `10.8.0.0/24` and `10.0.0.0/16` as remote subnets. `10.8.0.0/24` is for VPS/OpenVPN-originated traffic; `10.0.0.0/16` is for Fortigate-side monitoring and log hosts crossing the VPS hub toward Palo. Avoid overlapping IPv4 and IPv6 Palo tunnels with the same inner IPv4 selectors unless xfrm policy preference is controlled.
