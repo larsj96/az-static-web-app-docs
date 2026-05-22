@@ -209,3 +209,61 @@ Notes from the first run:
 - `hp2` memory throughput looked unusually low compared with the other two nodes, so repeat this test before treating that as a durable finding.
 - The first apply hit Proxmox API task-status timeouts on `hp2`/`hp3`; the VMs existed and were imported/reconciled into Terraform state before rerunning apply.
 - The first Ansible collection exposed a role bug where fio work files were archived before cleanup. The role now removes fio work files before creating the result archive.
+
+### 2026-05-22 all-storage-iperf-02
+
+Purpose: compare the healthy HP local NVMe pools, the hp3 SAS capacity pool, and basic VM network throughput with `iperf3`.
+
+Terraform:
+
+- Stack: `terraform-proxmox/proxmox-bench`
+- State key: `terraform-proxmox/proxmox-bench/terraform.tfstate`
+- VMs: `bench-hp1`, `bench-hp2`, `bench-hp3`, `bench-hp3-sas`
+- VLAN: 12
+- Disk: 100 GiB per VM
+- Storage: `nvme-local` for HP NVMe VMs, `sas-hp3` for the hp3 SAS VM
+
+Storage tested:
+
+| Storage ID | Node | Backing storage |
+| --- | --- | --- |
+| `nvme-local` | `hp1` | HP local NVMe LVM-thin pool |
+| `nvme-local` | `hp2` | HP local NVMe LVM-thin pool |
+| `nvme-local` | `hp3` | HP local NVMe LVM-thin pool |
+| `sas-hp3` | `hp3` | 4.9 TB SAS logical volume, LVM-thin |
+
+Runtime overrides:
+
+```text
+benchmark_cpu_seconds=60
+benchmark_memory_seconds=60
+benchmark_fio_runtime=60
+benchmark_fio_size=4G
+iperf server=bench-hp1
+```
+
+Observed DHCP:
+
+| VM | Node | Storage | IP |
+| --- | --- | --- | --- |
+| `bench-hp1` | `hp1` | `nvme-local` | `10.0.0.42` |
+| `bench-hp2` | `hp2` | `nvme-local` | `10.0.0.43` |
+| `bench-hp3` | `hp3` | `nvme-local` | `10.0.0.41` |
+| `bench-hp3-sas` | `hp3` | `sas-hp3` | `10.0.0.44` |
+
+Results:
+
+| Host | Node | Storage | CPU eps | Mem MiB/s | iperf to hp1 Mbit/s | Seq read MiB/s | Seq write MiB/s | 4k rand read IOPS | 4k rand write IOPS | 70/30 read IOPS | 70/30 write IOPS |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench-hp1` | `hp1` | `nvme-local` | 4623 | 3579 | server | 3022 | 884 | 167006 | 74025 | 114034 | 48887 |
+| `bench-hp2` | `hp2` | `nvme-local` | 4325 | 765 | 939 | 1444 | 689 | 155186 | 71662 | 110684 | 47452 |
+| `bench-hp3` | `hp3` | `nvme-local` | 4721 | 7231 | 939 | 837 | 765 | 202817 | 152103 | 136264 | 58412 |
+| `bench-hp3-sas` | `hp3` | `sas-hp3` | 4722 | 9766 | 938 | 1516 | 221 | 7164 | 1245 | 2316 | 1001 |
+
+Notes from this run:
+
+- `iperf3` between the benchmark VMs landed around 938-939 Mbit/s, which matches the current 1 Gbit path expectation.
+- `bench-hp3-sas` had much lower random and mixed-random IOPS than the NVMe-backed VMs. That is expected for SAS capacity storage and confirms it should not be treated like fast VM storage.
+- `bench-hp3-sas` took much longer to clone/import than the NVMe-backed VMs, which is another practical signal for placement decisions.
+- `bench-hp2` again showed unusually low memory throughput compared with the other VMs. Treat this as something to investigate or rerun before making a hardware conclusion.
+- The first `iperf3` implementation tried parallel clients against one server and failed for some hosts because iperf3 only runs one test at a time. The role now serializes iperf clients.
