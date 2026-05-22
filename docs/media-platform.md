@@ -147,6 +147,54 @@ media_data_disk_fstype: "ext4"
 
 The Ansible role only creates a filesystem when the data disk has no filesystem yet.
 
+## Media Secrets In Vault
+
+Media application secrets live in HashiCorp Vault, not Git.
+
+Vault path:
+
+```text
+homelab/media/media1
+```
+
+Current fields:
+
+| Field | Purpose |
+| --- | --- |
+| `plex_claim` | Short-lived Plex claim token used only during initial claim/reclaim. |
+| `unpackerr_sonarr_api_key` | Sonarr API key for Unpackerr integration. |
+| `unpackerr_radarr_api_key` | Radarr API key for Unpackerr integration. |
+
+Bastion has a limited Vault token in:
+
+```text
+~/.config/homelab/vault.env
+```
+
+Pull the ignored Ansible secrets file from Vault:
+
+```bash
+cd ~/ansible-bench-run
+./scripts/pull-media-secrets-from-vault.sh
+```
+
+Update one media secret:
+
+```bash
+cd ~/ansible-bench-run
+./scripts/put-media-secret.sh plex_claim 'claim-xxxx'
+./scripts/pull-media-secrets-from-vault.sh
+ansible-playbook playbooks/media.yml
+```
+
+After Plex is claimed, clear the claim token because it is temporary:
+
+```bash
+./scripts/put-media-secret.sh plex_claim ''
+./scripts/pull-media-secrets-from-vault.sh
+ansible-playbook playbooks/media.yml
+```
+
 ## Services
 
 | Service | Role |
