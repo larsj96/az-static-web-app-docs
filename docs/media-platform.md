@@ -10,12 +10,35 @@ Build a lab media platform without mixing three different concerns into one frag
 
 The first version can be simple, but the boundaries should be clear so the stack can grow without a rebuild.
 
-## Recommended First Split
+## Current Live Shape
+
+`media1` is the first combined media VM:
+
+| Item | Value |
+| --- | --- |
+| VM | `media1` |
+| VMID | `9050` |
+| IP | `10.0.0.39` |
+| VLAN | `12 / fortigate_onprem_k8s` |
+| Role | Docker Compose host for Plex and media automation |
+
+The current app stack is:
+
+- Plex
+- Sonarr
+- Radarr
+- Prowlarr
+- qBittorrent
+- Overseerr
+
+The services are running on `media1` now, with local media directories used only as the bootstrap storage target. Do not treat the VM boot/app disk as the long-term media library.
+
+## Recommended Split
 
 | Layer | First Choice | Why |
 | --- | --- | --- |
 | Media storage | HP2 local SAS set, 10x600 GB | Good use for the existing 5 TB-ish SAS capacity that should not become Ceph right now. |
-| Media apps | One Docker Compose VM, for example `media1` | Sonarr/Radarr/Jackett/qBittorrent/Overseerr work well together and share download/import paths. |
+| Media apps | One Docker Compose VM, `media1` | Sonarr/Radarr/Prowlarr/qBittorrent/Overseerr work well together and share download/import paths. |
 | Plex compute | Start on `media1`, split to `plex1` later if needed | Keeps day-one simple while preserving a clean migration path for transcoding/GPU/CPU tuning. |
 | External access | Cloudflare DNS and Access for admin apps; be careful with streaming | Cloudflare Tunnel is great for admin HTTP apps, but heavy Plex streaming should be reviewed before proxying. |
 
@@ -37,6 +60,26 @@ That gives cleaner backups, easier VM rebuilds, and less risk to the Proxmox hos
 | SMB share from a storage VM | Good if Windows clients need direct access | More moving parts, but useful later. |
 | Passthrough/controller to storage VM | Possible later | Stronger isolation, but more planning and downtime. |
 | Ceph | Later | Wait until 10 Gbit and SAS layout are proven. Do not force media storage into Ceph now. |
+
+## Reusable Storage Contract
+
+Keep the storage contract stable even when the backing storage changes:
+
+| Path | Owner | Purpose |
+| --- | --- | --- |
+| `/opt/media/config` | `media1` local disk | Container configs and app state. |
+| `/opt/media/downloads` | `media1` local disk for now | Shared download/import staging path. |
+| `/mnt/media/movies` | HP2 SAS NFS later | Plex/Radarr movie library. |
+| `/mnt/media/tv` | HP2 SAS NFS later | Plex/Sonarr TV library. |
+
+The future HP2 SAS model should expose one media export to `media1`, mounted at `/mnt/media`, with `movies` and `tv` below it. That lets Plex stay on the same container paths while the host mount changes from local bootstrap directories to NFS-backed storage.
+
+Before enabling NFS:
+
+- Confirm the HP2 SAS filesystem and export path.
+- Confirm the UID/GID used by the media containers can read and write the export.
+- Confirm the export is reachable from VLAN 12.
+- Take note of free capacity and expected growth rate before moving real libraries.
 
 ## Terraform Shape
 
@@ -98,7 +141,7 @@ Ansible owns:
 - Manage environment files outside Git.
 - Configure Telegraf so the media VM reports metrics automatically.
 
-Suggested app set:
+Current app set:
 
 | Service | Role |
 | --- | --- |
@@ -132,6 +175,20 @@ Use Cloudflare Access for admin-facing HTTP apps:
 
 Plex needs a separate decision. Cloudflare Tunnel may be fine for management/light access, but avoid blindly proxying heavy video traffic through Cloudflare. Prefer VPN or Plex-native remote access for streaming unless the policy and traffic profile are confirmed acceptable.
 
+## Monitoring Expectations
+
+`media1` belongs in the Ansible `telegraf_agents` group and currently reports host metrics to the central monitoring stack. Treat these as the baseline checks before adding public exposure or migrating storage:
+
+| Signal | Expectation |
+| --- | --- |
+| Host availability | `media1` should respond to ping and SSH from the internal management path. |
+| Docker health | Plex, Sonarr, Radarr, Prowlarr, qBittorrent, and Overseerr containers should stay running after reboot. |
+| Disk capacity | Track `/opt/media` and `/mnt/media` usage separately so app config growth is not confused with media library growth. |
+| NFS health later | When HP2 SAS is mounted, alert on missing `/mnt/media`, stale mounts, or sudden drops in available capacity. |
+| Service reachability | Internal ports `32400`, `8989`, `7878`, `9696`, `8080`, and `5055` should be checked from the services VLAN or monitoring host. |
+
+Application-level API keys and credentials should stay out of the documentation and out of Git. Add service-specific checks only after credentials are stored in the chosen secrets workflow.
+
 ## Deployment Status
 
 Deployed on `2026-05-21`:
@@ -149,7 +206,7 @@ Deployed on `2026-05-21`:
 | Overseerr | Running |
 | Telegraf | Active |
 
-The current media library path is local to the VM for bootstrapping. Move it to HP2 SAS-backed storage once the export path and permissions are decided.
+The current media library path is local to the VM for bootstrapping. Move it to HP2 SAS-backed NFS once the export path and permissions are decided.
 
 ## Next Implementation Steps
 

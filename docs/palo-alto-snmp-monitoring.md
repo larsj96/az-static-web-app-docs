@@ -6,6 +6,14 @@ Use the existing `monitoring1` stack in `larsj96/Ansible` for Palo Alto metrics:
 Palo Alto SNMP -> monitoring1 Telegraf -> InfluxDB -> Grafana
 ```
 
+Live polling target:
+
+```text
+10.1.1.65  pa510-homelab-ljn in-band interface
+```
+
+The dedicated management address is useful for HTTPS/API work, but SNMP is currently answering on the in-band/dataplane interface where the Terraform-managed interface management profile allows SNMP.
+
 ## Terraform-Managed Palo Alto Settings
 
 The Palo Alto in-band management profile is managed in:
@@ -55,7 +63,7 @@ terraform apply
 - Configure SNMP statistics polling under `Device > Setup > Operations > SNMP Setup` if it is not already present.
 - Use SNMPv3 where possible: `authPriv`, SHA authentication, AES privacy.
 - Prefer polling the Terraform-managed in-band/dataplane interface instead of the dedicated MGT interface when possible.
-- Confirm `monitoring1` (`10.0.0.38`) can reach the chosen Palo Alto address on UDP/161.
+- Confirm `monitoring1` (`10.0.0.38`) can reach `10.1.1.65` on UDP/161.
 - Add firewall/security policy only if the monitoring path crosses zones. If polling the Palo Alto MGT interface directly, PAN-OS SNMP enablement is the key control; if polling through dataplane zones, policy may be required.
 
 Provider note: the PAN-OS Terraform provider exposes interface management profile SNMP cleanly. A first-class provider resource for the global SNMP setup/user was not available in the local provider schema used here, so that part remains a separate follow-up unless we manage it through a lower-level API/tool.
@@ -67,6 +75,10 @@ Start with numeric OIDs in Telegraf so the container does not need MIB files:
 - Standard SNMP system identity and uptime.
 - IF-MIB interface state and octet counters, including 64-bit `ifXTable` counters.
 - PAN-COMMON-MIB session counters: utilization, active sessions, active TCP, active UDP, and active ICMP.
+
+Live verified fields include `PanSystem` uptime, PAN-OS software version, HA state, active TCP/UDP/ICMP sessions, interface descriptions/status/octet counters, host CPU load indexes, and fan readings.
+
+The route from `monitoring1` to the Palo site depends on the Fortigate-to-VPS and Palo-to-VPS hub path. `monitoring1` sends traffic to the Fortigate gateway, Fortigate routes `10.1.0.0/16` over `to-hostinger`, and the VPS forwards it into the Palo IPsec selector.
 
 Next dashboard candidates after the first walk:
 

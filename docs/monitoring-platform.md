@@ -48,6 +48,8 @@ Fortigate DHCP assigned `10.0.0.38`, and the QEMU guest agent reports that addre
 flowchart LR
   agents["Telegraf agents\nservers and VMs"] --> influx["InfluxDB 2.x\nbucket homelab"]
   active["Telegraf active checks\nping + x509"] --> influx
+  pve["Proxmox API polling\nhp1 hp2 hp3"] --> influx
+  snmp["SNMP polling\niLO Fortigate Palo Alto"] --> influx
   influx --> grafana["Grafana\nprimary dashboards"]
   influx --> chrono["Chronograf"]
   influx --> kap["Kapacitor"]
@@ -109,24 +111,30 @@ https://10.0.124.167:443
 
 | Device class | Current targets | Current method |
 | --- | --- | --- |
-| Proxmox management | `10.0.0.162`, `10.0.0.163`, `10.0.0.164`, `10.0.0.165` | Ping, Proxmox web certificate check on `10.0.0.162` |
-| HP iLO | `10.0.124.165`, `10.0.124.166`, `10.0.124.167` | Ping and HTTPS certificate checks |
-| Fortigate | `10.0.0.33`, `10.0.0.161` | Ping |
+| Proxmox management | `10.0.0.162`, `10.0.0.163`, `10.0.0.164`, `10.0.0.165` | Telegraf Proxmox API input, ping, Proxmox web certificate check on `10.0.0.162` |
+| HP iLO | `10.0.124.165`, `10.0.124.163` | SNMPv2 polling through Telegraf |
+| HP iLO pending | `10.0.124.164` | Currently times out on UDP/161; enable after hp1 iLO SNMP is fixed |
+| Fortigate | `10.0.0.33` | SNMPv2 polling through Telegraf |
+| Palo Alto | `10.1.1.65` | SNMPv2 polling through Telegraf over the Palo/Fortigate hub route |
 
-SNMP is scaffolded but disabled by default:
+SNMP is enabled in Ansible and uses the ignored monitoring secrets file for the community:
 
 ```yaml
-monitoring_snmp_enabled: false
+monitoring_snmp_enabled: true
 monitoring_snmp_community: "{{ snmp_community | default('') }}"
 ```
 
-When SNMP is enabled on iLO/Fortigate, set the community in the ignored `group_vars/monitoring_secrets.yml`, flip `monitoring_snmp_enabled` to `true`, and rerun:
+After changing targets or secrets, rerun the monitoring stack from `bastion01`:
 
 ```bash
 ansible-playbook playbooks/monitoring.yml
 ```
 
-The first SNMP collection uses generic `SNMPv2-MIB` and `IF-MIB` data: system name, uptime, interface names, interface status, and in/out octets. Later we can add richer device-specific collection with HP iLO Redfish/IPMI exporter, Fortigate SNMP OIDs, or a Prometheus exporter if we want deeper dashboards.
+Current SNMP collection includes generic system identity/uptime, interface counters, HP iLO health OIDs, Fortigate system/interface OIDs, and Palo Alto PAN-OS session/interface/CPU/fan OIDs.
+
+Proxmox metrics are currently collected by Telegraf through the Proxmox API. The measurement is `proxmox`, and live samples include VM status, CPU load, uptime, disk totals, disk used, and disk used percentage. This is the working source of truth today and feeds the `Proxmox VE Homelab` Grafana dashboard.
+
+Proxmox's native Datacenter metric server is not configured yet. The currently pinned `bpg/proxmox` provider in `terraform-proxmox/proxmox-core` does not support that resource, so the repo keeps `metrics.tf.example` as a future-provider-upgrade note rather than active Terraform.
 
 ## Logs Pipeline
 
@@ -244,8 +252,9 @@ Deployed on `2026-05-21`:
 | Telegraf on `media1` | Active |
 | Grafana InfluxDB datasource | Provisioned |
 | Grafana OpenSearch datasource | Provisioned |
-| iLO/Fortigate/Proxmox active checks | Configured on central Telegraf |
-| SNMP collection | Scaffolded, disabled until device SNMP/community is confirmed |
+| Proxmox API metrics | Active through Telegraf for hp1, hp2, hp3, and dell1 |
+| iLO/Fortigate/Palo Alto SNMP | Active for confirmed targets |
+| hp1 iLO SNMP | Pending; UDP/161 currently times out |
 
 ## Grafana Public Access Option
 
