@@ -117,7 +117,7 @@ The benchmark inventory can include an iperf server host:
 bench-hp1
 ```
 
-Each benchmark VM except the selected server runs an `iperf3` client test and stores `iperf3.json` in the result archive.
+The role starts one persistent `iperf3` daemon on that inventory host, runs client tests from every other benchmark VM, stores `iperf3.json` in each client archive, then stops the daemon.
 
 Quick smoke test:
 
