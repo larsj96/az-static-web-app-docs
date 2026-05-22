@@ -27,7 +27,8 @@ Default temporary VMs:
 | `bench-hp1` | `hp1` | `nvme-local` | 9301 | 4 cores | 8 GiB | 100 GiB |
 | `bench-hp2` | `hp2` | `nvme-local` | 9302 | 4 cores | 8 GiB | 100 GiB |
 | `bench-hp3` | `hp3` | `nvme-local` | 9303 | 4 cores | 8 GiB | 100 GiB |
-| `bench-dell1` | `dell1` | `nvme-dell` | 9304 | 4 cores | 8 GiB | 100 GiB |
+| `bench-hp3-sas` | `hp3` | `sas-hp3` | 9304 | 4 cores | 8 GiB | 100 GiB |
+| `bench-dell1` | `dell1` | `nvme-dell` | 9305 | 4 cores | 8 GiB | 100 GiB |
 
 The VMs are disposable. They should be destroyed after each benchmark run unless you are actively comparing several runs.
 
@@ -46,6 +47,7 @@ Storage model:
 | Storage ID | Nodes | Backing storage | Notes |
 | --- | --- | --- | --- |
 | `nvme-local` | `hp1`, `hp2`, `hp3` | Local NVMe LVM-thin pool on each HP node | Same storage ID, but the actual disk is local to the selected node. This is the main HP baseline before Ceph. |
+| `sas-hp3` | `hp3` | HP Smart Array 4.9 TB SAS logical volume, LVM-thin | Useful for comparing hp3 SAS capacity storage against hp3 NVMe local storage. |
 | `nvme-dell` | `dell1` | Dell local NVMe-backed storage | Useful for comparison, but keep Dell results separate because the server is not considered reliable long-term. |
 
 ## Run Model
