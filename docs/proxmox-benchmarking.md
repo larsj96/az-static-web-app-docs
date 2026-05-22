@@ -30,6 +30,14 @@ Default temporary VMs:
 
 The VMs are disposable. They should be destroyed after each benchmark run unless you are actively comparing several runs.
 
+Prerequisite:
+
+```text
+local:iso/ubuntu-24.04-server-cloudimg-amd64.img
+```
+
+The image must exist on each target HP node. The benchmark stack does not own this image file because repeated temporary test runs should not fight Proxmox files that already exist.
+
 ## Run Model
 
 ```mermaid
