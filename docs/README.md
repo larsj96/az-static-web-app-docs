@@ -43,6 +43,7 @@ See [Terraform State](terraform-cloud-state.md) for the recommended state split.
 - [Terraform State](terraform-cloud-state.md)
 - [Infrastructure As Code Operating Model](iac-operating-model.md)
 - [Secrets Management](secrets-management.md)
+- [Proxmox Benchmarking](proxmox-benchmarking.md)
 - [Storage Plan](storage-plan.md)
 - [Proxmox And Ceph Plan](proxmox-ceph-plan.md)
 - [Self-Hosted Docs Platform](self-hosted-docs-platform.md)
