@@ -107,6 +107,14 @@ The Palo Alto route preference is:
 10.8.0.0/24 -> tunnel.10 Frankfurt VPS hub, metric 10
 ```
 
+The Fortigate route preference is:
+
+```text
+10.1.0.0/16 -> palo-ipv6 direct Palo Alto IPv6 IPsec, distance 5
+10.1.0.0/16 -> to-hostinger Frankfurt VPS fallback, distance 50
+10.8.0.0/24 -> to-hostinger Frankfurt VPS hub, distance 10
+```
+
 Known-good validation from the Frankfurt VPS on `2026-05-23`:
 
 ```text
@@ -116,6 +124,7 @@ Palo IPsec tunnel ipsec-fortigate-ipv6:pid-v4-00-00 -> established
 Fortigate phase1 palo-ipv6 -> up
 Fortigate phase2 p2-v4-10-0-0-0-16-to-10-1-0-0-16 -> up
 Palo route 10.0.0.0/16 -> tunnel.20 selected
+Fortigate route 10.1.0.0/16 -> palo-ipv6 distance 5, VPS fallback distance 50
 ```
 
 Traffic counters stay at zero until real inside traffic crosses the tunnel. Test this from a Palo-side client to a Fortigate-side host, or from a Fortigate-side host to a Palo-side host. Testing from the VPS does not validate the direct tunnel because the VPS is a third path.
