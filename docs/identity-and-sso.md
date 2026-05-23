@@ -8,6 +8,42 @@ Add **FreeIPA** later only if Linux host identity, Kerberos, LDAP, SSH login pol
 
 Keep local break-glass accounts everywhere. Identity infrastructure must improve security, not make the lab impossible to recover.
 
+## Live Authentik Deployment
+
+`auth1` is the dedicated Authentik VM.
+
+| Item | Value |
+| --- | --- |
+| VM | `auth1` |
+| VMID | `9080` |
+| VLAN | `12` / `fortigate_onprem_k8s` |
+| IP | `10.0.0.36/27` |
+| Internal URL | `http://10.0.0.36:9000` |
+| Public URL | `https://auth.lanilsen.com` |
+| Deployment | Terraform VM + Ansible Docker Compose |
+| Authentik version | `2026.2.2` |
+
+Terraform owns the VM in:
+
+```text
+C:\github\terraform-proxmox\proxmox-core\auth1.tf
+```
+
+Ansible owns the application stack in:
+
+```text
+C:\github\ansible-homelab\playbooks\authentik.yml
+C:\github\ansible-homelab\roles\authentik_stack
+```
+
+Cloudflare owns the public tunnel/DNS route in:
+
+```text
+C:\github\terraform-cloudflare\docs-tunnel
+```
+
+`auth.lanilsen.com` is intentionally not protected by Cloudflare Access. It is the identity provider endpoint itself, and SAML clients such as Palo Alto GlobalProtect must be able to reach it before the VPN is connected.
+
 ## Why Not FreeIPA Alone
 
 FreeIPA is excellent for LDAP, Kerberos, host enrollment, Linux users, sudo policy, and certificate authority workflows. It is not the best single answer for modern web SSO.
@@ -53,6 +89,19 @@ flowchart LR
 | Vault | Automation secrets, tokens, generated app credentials | Internal only |
 | Bitwarden/Vaultwarden | Human passwords and break-glass secrets | Internal or carefully protected |
 
+## MFA Standard
+
+Use TOTP first. This works with Google Authenticator, Authy, 1Password, Bitwarden Authenticator, Microsoft Authenticator, and similar apps.
+
+Baseline policy:
+
+- Every VPN-capable user must have TOTP enrolled.
+- The VPN group should require MFA before SAML assertion is released to Palo Alto GlobalProtect.
+- Admin accounts should use TOTP now and passkeys/WebAuthn later.
+- Keep one emergency local firewall/Vault/Proxmox account outside Authentik.
+
+In Authentik this means using an Authenticator Validation stage that allows TOTP and configures missing authenticators instead of silently skipping MFA.
+
 ## Compatibility Map
 
 | Platform | Central auth fit | Recommended path | Notes |
@@ -84,15 +133,32 @@ Do not store IdP bootstrap passwords, client secrets, or signing keys in Git. St
 
 ## Implementation Order
 
-1. Deploy `auth1` as a dedicated VM or carefully backed Docker host.
-2. Run Authentik with Docker Compose, Postgres, and Redis.
+1. Deploy `auth1` with Terraform.
+2. Run Authentik with Docker Compose, Postgres, and Redis through Ansible.
 3. Store Authentik bootstrap credentials and generated client secrets in Vault/Bitwarden.
-4. Integrate Grafana first because it is low-risk and easy to validate.
-5. Integrate Proxmox OIDC next, while keeping `root@pam`.
-6. Integrate Vault OIDC, while keeping unseal/root recovery outside SSO.
-7. Integrate Cloudflare Access with Authentik if we want one identity flow for public apps.
-8. Integrate Palo Alto GlobalProtect and Fortigate after the web apps are proven.
-9. Add FreeIPA only if Linux host login, LDAP directory, or Kerberos becomes worth the extra moving parts.
+4. Enable TOTP MFA and create the first VPN user/group.
+5. Create an Authentik SAML provider/application for Palo Alto GlobalProtect.
+6. Point Palo Alto GlobalProtect SAML at Authentik.
+7. Integrate Grafana because it is low-risk and easy to validate.
+8. Integrate Proxmox OIDC next, while keeping `root@pam`.
+9. Integrate Vault OIDC, while keeping unseal/root recovery outside SSO.
+10. Integrate Cloudflare Access with Authentik if we want one identity flow for public apps.
+11. Add FreeIPA only if Linux host login, LDAP directory, or Kerberos becomes worth the extra moving parts.
+
+## Friend Onboarding Flow
+
+For Plex/VPN access:
+
+1. Create a named user in Authentik with their real email address.
+2. Add them to a limited group such as `vpn-plex-users`.
+3. Force password change at first login.
+4. Require TOTP enrollment during first login.
+5. Give them the GlobalProtect portal hostname.
+6. Confirm they can connect from mobile data.
+7. Confirm they can reach Plex and only the networks/services intended for that group.
+8. Disable the user when access is no longer needed.
+
+Do not share a common VPN user. Every friend gets a personal account, personal MFA, and can be disabled independently.
 
 ## Break-Glass Rules
 
@@ -107,4 +173,3 @@ Keep these independent from SSO:
 - One documented path to reach the lab if the IdP is down.
 
 The IdP should be highly available eventually, but at the current lab stage it is more important to have a clear manual recovery path than to pretend identity is already production-grade HA.
-
