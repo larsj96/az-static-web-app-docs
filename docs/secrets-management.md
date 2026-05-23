@@ -9,6 +9,8 @@ Use two layers:
 
 Vault is the right default for Terraform and Ansible because it has a stable API and Terraform provider. Vaultwarden is excellent for humans using browser/mobile clients, but it is not the best source of truth for infrastructure-generated secrets.
 
+Identity and SSO are related, but separate. Use Authentik/Cloudflare Access/optional FreeIPA to decide who can log in; use Vault and Bitwarden/Vaultwarden to store secrets. See [Identity And SSO](identity-and-sso.md).
+
 ## Target Layout
 
 ```mermaid
