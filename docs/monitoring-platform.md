@@ -316,9 +316,12 @@ Recommended Palo Alto coverage:
 
 Palo Alto status as of `2026-05-24`:
 
-- Syslog server profile `homelab-opensearch` exists on the PA-510 and points at `10.0.0.38:5514/udp`.
-- Commit job `148` completed successfully.
-- Traffic log forwarding is not fully wired yet. The provider exposes `panos_log_forwarding_profile`, but the shared-profile reference does not resolve against the standalone PA-510 syslog profile location. Finish this by creating a standalone log forwarding profile that references `homelab-opensearch`, then attach it to the VPN, GlobalProtect, and internet egress security rules with `log_setting = "homelab-opensearch"`.
+- Vsys syslog server profile `homelab-opensearch` exists on the PA-510 and points at `10.0.0.38:5514/udp`.
+- Vsys log forwarding profile `homelab-opensearch` forwards traffic, threat, URL, and WildFire logs to that syslog profile.
+- Shared syslog server profile `homelab-opensearch-shared` exists for system/config/GlobalProtect log settings and also points at `10.0.0.38:5514/udp`.
+- The important security policies have `log-setting = homelab-opensearch` and log at session end enabled.
+- Commit job `149` completed successfully.
+- This is captured in Terraform at `terraform-palo/live/homelab/network-base/logging.tf` using the PAN-OS XML API pattern because the standalone PA-510 needs direct vsys/shared XPaths for this logging layout.
 
 Verification on `2026-05-24`:
 
@@ -327,7 +330,7 @@ Verification on `2026-05-24`:
 | Ubuntu VMs via Filebeat | `homelab-filebeat-*` | Confirmed |
 | Fortigate CEF syslog | `homelab-fortigate-*` | Confirmed |
 | Generic network syslog | `homelab-syslog-*` | Confirmed |
-| Palo Alto traffic/system syslog | `homelab-paloalto-*` | Pending full log-forwarding profile attachment |
+| Palo Alto traffic/system syslog | `homelab-paloalto-*` | Confirmed |
 
 Fortigate classifier note: Fortigate CEF events can contain tunnel names such as `palo-ipv6`. The Logstash classifier must identify Fortigate by hostname `FGT*` or `CEF:0|Fortinet|Fortigate|` before checking Palo Alto keywords, otherwise Fortigate VPN events can be misindexed as Palo Alto.
 
@@ -444,7 +447,7 @@ Deployed on `2026-05-21`:
 | SNMP collection | Active for confirmed iLO, Fortigate, and Palo Alto targets |
 | Filebeat log shipping | Active on current Ubuntu VM inventory |
 | Fortigate syslog | Verified into `homelab-fortigate-*` |
-| Palo Alto syslog profile | Created and committed; full policy log forwarding still pending |
+| Palo Alto syslog/log forwarding | Verified into `homelab-paloalto-*` |
 
 ## Grafana Public Access Option
 
