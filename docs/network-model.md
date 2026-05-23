@@ -115,6 +115,15 @@ The Fortigate route preference is:
 10.8.0.0/24 -> to-hostinger Frankfurt VPS hub, distance 10
 ```
 
+NAT-T is required for the direct Starlink IPv6 data plane:
+
+```text
+Palo Alto ike-gw-fortigate-ipv6 -> NAT traversal enabled
+Fortigate palo-ipv6 -> nattraversal forced
+```
+
+Without UDP encapsulation, IKE and IPsec SAs came up, but WSL/PC traffic was one-way: Palo allowed `10.1.1.5 -> 10.0.0.0/16` and sent it out `tunnel.20`, but no useful return traffic was decapsulated. After enabling NAT-T, Palo showed `<natt>True</natt>` and real decap counters.
+
 Known-good validation from the Frankfurt VPS on `2026-05-23`:
 
 ```text
@@ -125,6 +134,14 @@ Fortigate phase1 palo-ipv6 -> up
 Fortigate phase2 p2-v4-10-0-0-0-16-to-10-1-0-0-16 -> up
 Palo route 10.0.0.0/16 -> tunnel.20 selected
 Fortigate route 10.1.0.0/16 -> palo-ipv6 distance 5, VPS fallback distance 50
+WSL TCP checks:
+  10.0.0.37:22 -> open
+  10.0.0.35:22 -> open
+  10.0.0.33:444 -> open
+  10.0.0.162:8006 -> open
+WSL HTTP checks:
+  https://10.0.0.33:444/ -> HTTP 302
+  https://10.0.0.162:8006/ -> HTTP 200
 ```
 
 Traffic counters stay at zero until real inside traffic crosses the tunnel. Test this from a Palo-side client to a Fortigate-side host, or from a Fortigate-side host to a Palo-side host. Testing from the VPS does not validate the direct tunnel because the VPS is a third path.
