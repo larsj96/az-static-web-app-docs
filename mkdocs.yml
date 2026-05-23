@@ -74,4 +74,5 @@ nav:
       - Cloudflare Tunnel And Plex: cloudflare-tunnel-plex.md
   - Operations:
       - Frankfurt VPS Ops Hub: frankfurt-vps-ops-hub.md
+      - IPsec VPN Throughput Baseline (2026-05-24): ipsec-vpn-throughput-baseline-2026-05-24.md
       - Palo Alto SNMP Monitoring: palo-alto-snmp-monitoring.md
