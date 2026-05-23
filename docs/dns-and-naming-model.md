@@ -121,6 +121,16 @@ For DHCP-enabled Palo VLANs, the intended DNS server is the local Palo interface
 10.1.1.65
 ```
 
+Applied DHCP DNS values:
+
+| Palo VLAN | Interface | Primary DNS handed out |
+| --- | --- | --- |
+| infra | `ethernet1/3.10` | `10.1.1.65` |
+| guest/client | `ethernet1/3.20` | `10.1.2.129` |
+| work | `ethernet1/3.40` | `10.1.5.1` |
+
+If a Windows client is manually pinned to public DNS such as `1.1.1.1` and `8.8.8.8`, internal names will not resolve even though the Palo/Fortigate DNS path is working. Change the adapter DNS back to automatic, renew DHCP, or manually point it at the local Palo interface DNS.
+
 Rules include wildcard matching because PAN-OS DNS proxy rules match FQDN tokens. The rules forward both the bare zone and hostnames below it:
 
 ```text
