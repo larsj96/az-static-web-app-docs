@@ -125,6 +125,34 @@ Current nftables/iptables intent:
 
 Do not remove this while the Fortigate selectors stay scoped to the VPS transit subnet. If the Fortigate tunnel is later widened to include the Palo networks directly, document that as a deliberate migration.
 
+## Direct Palo To Fortigate Fallback Role
+
+As of `2026-05-23`, the direct Palo Alto to Fortigate IPv6 site-to-site tunnel is up and should be preferred for normal Palo-side to Mo i Rana-side traffic:
+
+```text
+Palo 10.1.0.0/16 -> Fortigate 10.0.0.0/16
+transport: IPv6 IPsec
+Palo tunnel: tunnel.20
+Fortigate phase1: palo-ipv6
+```
+
+Palo route preference:
+
+```text
+10.0.0.0/16 -> tunnel.20 direct Fortigate IPv6 IPsec, metric 5
+10.0.0.0/16 -> tunnel.10 Frankfurt VPS fallback, metric 50
+```
+
+The VPS remains important for:
+
+```text
+OpenVPN admin access
+Terraform runs that need a stable public execution point
+Fortigate-side Starlink CGNAT recovery path
+fallback route if direct Palo-to-Fortigate IPv6 has an issue
+external IPv6 validation for gp.lanilsen.com
+```
+
 Initial setup command, if rebuilding:
 
 ```bash

@@ -32,11 +32,11 @@ workstation internet -> Palo Alto -> Starlink WAN
 selected private routes -> Palo Alto tunnel -> VPS or future IPv6 site-to-site
 ```
 
-Future tunnel direction:
+Current tunnel direction:
 
-- keep the Palo Alto to VPS route-based tunnel for selected private/ops subnets
-- test IPv6 IPsec directly between Palo Alto and Fortigate
-- add WireGuard outbound as an automation fallback if needed
+- keep the Palo Alto to VPS route-based tunnel for selected private/ops subnets and fallback
+- use direct IPv6 IPsec between Palo Alto and Fortigate for normal `10.1.0.0/16` to `10.0.0.0/16` site-to-site traffic
+- add WireGuard outbound as an automation fallback later if needed
 
 GlobalProtect is now the external remote-access path into the Palo Alto site. It is published directly over Starlink IPv6:
 
@@ -75,6 +75,89 @@ Mo i Rana access through the VPS hub:
 ```
 
 This NAT chain exists because the established IPsec selectors are not `172.31.250.0/24` aware. If a GlobalProtect client can connect and Palo logs show allowed `172.31.250.1 -> 10.0.0.x` sessions that age out as `app=incomplete`, check `nat-gp-clients-to-vps-hub` and the VPS SNAT rules first.
+
+## Direct IPv6 Palo Alto To Fortigate VPN
+
+The direct Palo Alto to Fortigate IPv6 IPsec tunnel is live as of `2026-05-23`.
+
+```text
+Palo Alto WAN global IPv6 <-> Fortigate WAN global IPv6
+IKEv2/IPsec route-based tunnel
+Protected IPv4 networks:
+  Palo Alto side: 10.1.0.0/16
+  Fortigate side: 10.0.0.0/16
+```
+
+Current live endpoints:
+
+```text
+Palo Alto: gp.lanilsen.com / 2a0d:3341:bb9c:af01::443
+Fortigate: port9 / 2a0d:3341:bb00:6320:a5b:eff:feca:b2e9
+Palo tunnel interface: tunnel.20
+Palo VPN zone: vpn-fortigate
+Fortigate phase1: palo-ipv6
+Fortigate phase2: p2-v4-10-0-0-0-16-to-10-1-0-0-16
+```
+
+The Palo Alto route preference is:
+
+```text
+10.0.0.0/16 -> tunnel.20 direct Fortigate IPv6 IPsec, metric 5
+10.0.0.0/16 -> tunnel.10 Frankfurt VPS fallback, metric 50
+10.8.0.0/24 -> tunnel.10 Frankfurt VPS hub, metric 10
+```
+
+Known-good validation from the Frankfurt VPS on `2026-05-23`:
+
+```text
+https://gp.lanilsen.com/ over IPv6 -> HTTP 302
+Palo IKE gateway ike-gw-fortigate-ipv6 -> established
+Palo IPsec tunnel ipsec-fortigate-ipv6:pid-v4-00-00 -> established
+Fortigate phase1 palo-ipv6 -> up
+Fortigate phase2 p2-v4-10-0-0-0-16-to-10-1-0-0-16 -> up
+Palo route 10.0.0.0/16 -> tunnel.20 selected
+```
+
+Traffic counters stay at zero until real inside traffic crosses the tunnel. Test this from a Palo-side client to a Fortigate-side host, or from a Fortigate-side host to a Palo-side host. Testing from the VPS does not validate the direct tunnel because the VPS is a third path.
+
+Terraform scaffolds:
+
+```text
+C:\github\terraform-palo\live\homelab\vpn-fortigate-ipv6
+C:\github\terraform-fortigate\vpn-palo-ipv6
+```
+
+The Palo Alto stack creates `tunnel.20`, zone `vpn-fortigate`, IKE/IPsec profiles, IPv4 proxy IDs, and bidirectional security policy. `network-base` owns the virtual router interface membership and route preference.
+
+The Fortigate stack creates a route-based IPsec interface, phase2 selectors, IPv4 address objects, static route to `10.1.0.0/16`, and bidirectional policies.
+
+The Fortigate can model separate IPv4 and IPv6 phase2 selectors, which is the pattern documented by Weberblog for Palo Alto to Fortigate IPv6 IPsec. The current PAN-OS Terraform provider rejected IPv6 proxy IDs in the same resource, so the live Terraform configuration only manages IPv4 protected networks over IPv6 transport.
+
+## Fortigate Remote Access VPN Over IPv6
+
+This is the planned Mo i Rana-side equivalent to Palo GlobalProtect. It should be a separate remote-access stack, not part of the Palo-to-Fortigate site-to-site tunnel.
+
+Recommended intent:
+
+```text
+fortigate-vpn.lanilsen.com AAAA <Fortigate port9 IPv6>
+Cloudflare DNS mode: DNS-only
+Remote clients terminate directly on Fortigate over IPv6
+Client access: selected Mo i Rana networks first
+Authentication: MFA-backed identity provider or strong Fortigate local users as temporary bootstrap
+```
+
+Use Terraform for the Fortigate portal, address pools, policies, and Cloudflare DNS record. Keep the public VPN DNS record unproxied; Cloudflare Tunnel/Access is for HTTP applications, not generic VPN control/data planes.
+
+Design choice to make before implementation:
+
+```text
+IKEv2/IPsec remote access:
+  cleaner VPN design, good for always-on clients, but client setup can be more fiddly
+
+SSL-VPN:
+  easier with FortiClient and browser-style portal, but should be locked down hard because SSL-VPN portals have a larger exposed attack surface
+```
 
 ## Management Boundary
 

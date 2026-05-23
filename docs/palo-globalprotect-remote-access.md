@@ -69,6 +69,32 @@ Important details:
 - Do not set the `/128` on both the provider gateway and the network tunnel helper, or PAN-OS rejects it as duplicate.
 - Do not set a gateway-level IP pool on the network tunnel helper when the gateway client config already has `172.31.250.0/24`.
 
+## IPv6 WAN Routing
+
+The Palo Alto must have a real IPv6 default route in the advanced routing logical router. Starlink delegated IPv6 successfully, but GlobalProtect and site-to-site IPv6 IPsec did not work reliably until this route was present:
+
+```text
+::/0
+  interface ethernet1/1
+  next hop fe80::200:5eff:fe00:101
+  metric 10
+```
+
+This is managed in:
+
+```text
+C:\github\terraform-palo\live\homelab\network-base
+```
+
+Known-good external validation from the Frankfurt VPS on `2026-05-23`:
+
+```text
+https://gp.lanilsen.com/ over IPv6 -> HTTP 302 /global-protect/login.esp
+remote IPv6 -> 2a0d:3341:bb9c:af01::443
+```
+
+The temporary `2a0d:3341:bb9c:af00::443/128` address was used while troubleshooting and should not be treated as the canonical GlobalProtect listener.
+
 ## Traffic Model
 
 GlobalProtect clients connect over public IPv6, then use an IPv4 client pool inside the tunnel:
@@ -106,6 +132,8 @@ Mo i Rana access uses the existing Frankfurt hub chain:
 ```
 
 The `nat-gp-clients-to-vps-hub` rule is important. The Palo-to-VPS and VPS-to-Fortigate selectors were built for `10.1.0.0/16`, `10.8.0.0/24`, and `10.0.0.0/16`, not for the GlobalProtect pool. Before this NAT existed, Palo traffic logs showed `172.31.250.1 -> 10.0.0.37` allowed by `gp-clients-to-vps-hub`, but the session aged out with `app=incomplete` because return traffic did not match the hub design.
+
+There is now also a direct Palo-to-Fortigate IPv6 site-to-site tunnel. Normal Palo-to-Mo i Rana site-to-site traffic should prefer `tunnel.20` directly to Fortigate with the VPS path retained as a fallback. GlobalProtect client transit can be moved to the direct tunnel later by explicitly adding the client pool or translated source to both sides of that design.
 
 ## Validation
 
