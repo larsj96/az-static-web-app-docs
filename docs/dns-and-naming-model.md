@@ -92,10 +92,43 @@ If the direct IPv6 tunnel is up, DNS follows the preferred direct path. If the d
 Terraform note:
 
 ```text
-C:\github\terraform-palo\live\homelab\network-base\dns-proxy.tf.example
+C:\github\terraform-palo\live\homelab\network-base\dns-proxy.tf
 ```
 
-That file documents the intended DNS proxy and conditional forwarding behavior. The active provider schema for DNS proxy must be validated before turning it into live state.
+The Palo DNS proxy is live and managed in R2 state from `terraform-palo/live/homelab/network-base`.
+
+Implementation note: the PAN-OS provider's native `panos_dns_proxy` resource writes through Panorama template paths in the provider version currently installed. This standalone PA-510 uses a Terraform-managed PAN-OS XML API call instead, via `terraform_data.homelab_dns_proxy`, so the object still has state and repeatable apply behavior.
+
+The live proxy object is:
+
+```text
+dnsproxy-homelab
+```
+
+It listens on:
+
+```text
+tunnel.12
+ethernet1/3
+ethernet1/3.10
+ethernet1/3.20
+ethernet1/3.40
+```
+
+For DHCP-enabled Palo VLANs, the intended DNS server is the local Palo interface address for that VLAN. The infra VLAN test address is:
+
+```text
+10.1.1.65
+```
+
+Rules include wildcard matching because PAN-OS DNS proxy rules match FQDN tokens. The rules forward both the bare zone and hostnames below it:
+
+```text
+mgmt.nilsen-tech.com
+*.mgmt.nilsen-tech.com
+ilo.nilsen-tech.com
+*.ilo.nilsen-tech.com
+```
 
 ## Public Cloudflare Names
 
@@ -159,8 +192,9 @@ dig @10.0.0.33 hp1.ilo.nilsen-tech.com
 From a Palo-side client or GlobalProtect client after DNS proxy forwarding is enabled:
 
 ```bash
-nslookup plex1.mgmt.nilsen-tech.com
-nslookup hp1.ilo.nilsen-tech.com
+nslookup plex1.mgmt.nilsen-tech.com 10.1.1.65
+nslookup hp1.ilo.nilsen-tech.com 10.1.1.65
+nslookup vg.no 10.1.1.65
 ```
 
 Expected:
@@ -168,6 +202,13 @@ Expected:
 ```text
 plex1.mgmt.nilsen-tech.com -> 10.0.0.39
 hp1.ilo.nilsen-tech.com    -> 10.0.124.164
+vg.no                      -> public DNS answer
+```
+
+If a name was tested before the wildcard rules were committed and still returns NXDOMAIN, clear the Palo DNS proxy cache:
+
+```text
+clear dns-proxy cache all
 ```
 
 For public Cloudflare names:
