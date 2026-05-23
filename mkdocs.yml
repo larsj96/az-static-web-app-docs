@@ -55,6 +55,7 @@ nav:
   - Architecture:
       - Overview: architecture.md
       - Network Model: network-model.md
+      - DNS And Naming Model: dns-and-naming-model.md
       - Storage Plan: storage-plan.md
       - Proxmox And Ceph: proxmox-ceph-plan.md
   - Infrastructure As Code:

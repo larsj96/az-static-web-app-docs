@@ -41,6 +41,7 @@ See [Terraform State](terraform-cloud-state.md) for the recommended state split.
 
 - [Architecture](architecture.md)
 - [Network Model](network-model.md)
+- [DNS And Naming Model](dns-and-naming-model.md)
 - [Terraform State](terraform-cloud-state.md)
 - [Infrastructure As Code Operating Model](iac-operating-model.md)
 - [Secrets Management](secrets-management.md)
