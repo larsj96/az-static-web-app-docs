@@ -8,7 +8,8 @@ Build a central monitoring platform that is managed like the rest of the homelab
 - cloud-init gives it the standard Ubuntu baseline and SSH keys.
 - Ansible installs Docker and deploys the monitoring stack.
 - Ansible installs Telegraf on monitored servers.
-- Ansible installs Filebeat on the same host group for centralized system/audit log shipping.
+- Ansible installs Filebeat on the same host group for centralized system/audit/service log shipping.
+- A dedicated syslog forwarder receives firewall/network syslog and relays it to Logstash.
 - Metrics go to InfluxDB.
 - Grafana is the primary dashboard front end.
 - Syslog/audit/application logs go to OpenSearch through Logstash.
@@ -26,6 +27,7 @@ Live VM:
 | VM | VMID | VLAN | Purpose | Size |
 | --- | ---: | ---: | --- | --- |
 | `monitoring1` | `9040` | `12` | Central monitoring stack | 8 CPU, 32 GiB RAM, 500 GiB disk |
+| `syslog1` | `9090` | `12` | Syslog forwarder for Fortigate/Palo/network devices | 2 CPU, 4 GiB RAM, 80 GiB disk |
 
 The VM should live on the services VLAN with the other app VMs:
 
@@ -39,6 +41,7 @@ Current inventory:
 
 ```text
 monitoring1 ansible_host=10.0.0.38 ansible_user=ubuntu
+syslog1 ansible_host=10.0.0.40 ansible_user=ubuntu
 ```
 
 Fortigate DHCP assigned `10.0.0.38`, and the QEMU guest agent reports that address.
@@ -205,8 +208,11 @@ Use OpenSearch instead of Elastic licensing-sensitive packages for the first Doc
 
 ```mermaid
 flowchart LR
-  syslog["Syslog / audit logs"] --> logstash["Logstash\n5044 beats\n5514 syslog"]
-  beats["Filebeat (system + audit)"] --> logstash
+  fgt["Fortigate syslog"] --> syslog1["syslog1\nrsyslog :514"]
+  palo["Palo Alto syslog"] --> syslog1
+  net["Other network devices"] --> syslog1
+  syslog1 --> logstash["Logstash\n5044 beats\n5514 syslog"]
+  beats["Filebeat\nsystem + auth + audit + journald + packages + services"] --> logstash
   logstash --> os["OpenSearch"]
   os --> grafana["Grafana\nlog views"]
   os --> dash["OpenSearch Dashboards"]
@@ -225,7 +231,125 @@ Live exposed ports on `monitoring1`:
 | `5044` | Beats input |
 | `5514/tcp+udp` | Syslog input |
 
+Live exposed ports on `syslog1`:
+
+| Port | Service |
+| ---: | --- |
+| `514/udp` | Firewall/network syslog receive |
+| `514/tcp` | Firewall/network syslog receive |
+
+`syslog1` writes a local copy under:
+
+```text
+/var/log/remote/<sender-ip>/YYYY-MM-DD.log
+```
+
+It also forwards to Logstash on `monitoring1:5514/tcp` with a disk-backed rsyslog queue, so short Logstash/OpenSearch restarts should not lose firewall logs.
+
+Current operational note:
+
+- `syslog1` VMID `9090` exists in Proxmox with planned IP `10.0.0.40`, but it did not answer SSH/ping after first boot.
+- Until that VM is fixed or recreated, Fortigate is temporarily sending syslog directly to `monitoring1:5514/udp`.
+- Logstash is already listening on `5514/tcp+udp`, so this temporary path is valid and verified.
+
 Restrict these ports with Fortigate policy. Do not expose dashboards publicly without Cloudflare Access or VPN.
+
+### Linux VM Log Coverage
+
+The `log_shipper` role installs Filebeat, `auditd`, and `rsyslog` on every host in `log_shipper_agents`.
+
+Default shipped sources:
+
+| Source | Examples |
+| --- | --- |
+| Journald | systemd units, service starts/stops, kernel-adjacent runtime logs |
+| System logs | `/var/log/syslog`, `/var/log/auth.log`, daemon/user/cron logs |
+| Audit logs | `/var/log/audit/audit.log` |
+| Kernel logs | `/var/log/kern.log` |
+| Package logs | `dpkg`, `apt`, unattended-upgrades |
+| Cloud-init logs | `/var/log/cloud-init.log`, `/var/log/cloud-init-output.log` |
+| Service logs | Nginx logs and Docker container JSON logs when present |
+
+Indexes:
+
+| Index pattern | Purpose |
+| --- | --- |
+| `homelab-filebeat-*` | Linux VM logs from Filebeat |
+| `homelab-fortigate-*` | Fortigate syslog parsed as key-value data where possible |
+| `homelab-paloalto-*` | Palo Alto syslog tagged for firewall/VPN troubleshooting |
+| `homelab-syslog-*` | Generic network syslog |
+
+### Firewall Syslog Targets
+
+Configure firewalls to send syslog to:
+
+```text
+syslog1.mgmt.nilsen-tech.com
+10.0.0.40
+UDP/514 or TCP/514
+```
+
+Temporary live Fortigate target:
+
+```text
+10.0.0.38
+UDP/5514
+format CEF
+```
+
+Recommended Fortigate coverage:
+
+- traffic logs for key policies
+- event/system logs
+- VPN/IKE/IPsec events
+- admin login/config-change events
+- security events/threat logs where licensed/enabled
+
+Recommended Palo Alto coverage:
+
+- system logs
+- traffic logs for GlobalProtect/VPN and inter-site tunnel policies
+- threat logs
+- config logs
+- GlobalProtect logs
+- HIP/auth logs if enabled later
+
+Palo Alto status as of `2026-05-24`:
+
+- Syslog server profile `homelab-opensearch` exists on the PA-510 and points at `10.0.0.38:5514/udp`.
+- Commit job `148` completed successfully.
+- Traffic log forwarding is not fully wired yet. The provider exposes `panos_log_forwarding_profile`, but the shared-profile reference does not resolve against the standalone PA-510 syslog profile location. Finish this by creating a standalone log forwarding profile that references `homelab-opensearch`, then attach it to the VPN, GlobalProtect, and internet egress security rules with `log_setting = "homelab-opensearch"`.
+
+Verification on `2026-05-24`:
+
+| Source | Index | Result |
+| --- | --- | --- |
+| Ubuntu VMs via Filebeat | `homelab-filebeat-*` | Confirmed |
+| Fortigate CEF syslog | `homelab-fortigate-*` | Confirmed |
+| Generic network syslog | `homelab-syslog-*` | Confirmed |
+| Palo Alto traffic/system syslog | `homelab-paloalto-*` | Pending full log-forwarding profile attachment |
+
+Fortigate classifier note: Fortigate CEF events can contain tunnel names such as `palo-ipv6`. The Logstash classifier must identify Fortigate by hostname `FGT*` or `CEF:0|Fortinet|Fortigate|` before checking Palo Alto keywords, otherwise Fortigate VPN events can be misindexed as Palo Alto.
+
+## Tunnel Throughput Baseline
+
+On `2026-05-24`, a short `iperf3` baseline was run from WSL on the Palo-side workstation to `mkdocs01` (`10.0.0.37`) over the Palo-to-Fortigate direct IPv6 IPsec tunnel.
+
+| Test | Result | Retransmits |
+| --- | ---: | ---: |
+| TCP, 4 streams, WSL -> homelab | ~9.1 Mbit/s sender / ~8.7 Mbit/s receiver | 78 |
+| TCP, 4 streams, reverse | ~6.9 Mbit/s sender / ~6.8 Mbit/s receiver | 139 |
+| TCP, 1 stream, WSL -> homelab | ~5.9 Mbit/s sender / ~5.8 Mbit/s receiver | 12 |
+| TCP, 1 stream, reverse | ~7.4 Mbit/s sender / ~7.2 Mbit/s receiver | 8 |
+
+Ping to `10.0.0.37` during the same check:
+
+```text
+min/avg/max = 93.6/116.9/178.9 ms
+packet loss = 0%
+```
+
+This is much lower than expected for a healthy Starlink-to-Starlink VPN path. Treat it as a baseline before tuning MTU/MSS, IPsec offload, Starlink path quality, and WSL effects.
 
 ## Ansible Layout
 
@@ -242,7 +366,9 @@ roles/docker_host/
 roles/monitoring_stack/
 roles/telegraf_agent/
 roles/log_shipper/
+roles/syslog_forwarder/
 playbooks/monitoring.yml
+playbooks/syslog-forwarder.yml
 ```
 
 Run from `bastion01`:
@@ -316,6 +442,9 @@ Deployed on `2026-05-21`:
 | Grafana OpenSearch datasource | Provisioned |
 | iLO/Fortigate/Proxmox active checks | Configured on central Telegraf |
 | SNMP collection | Active for confirmed iLO, Fortigate, and Palo Alto targets |
+| Filebeat log shipping | Active on current Ubuntu VM inventory |
+| Fortigate syslog | Verified into `homelab-fortigate-*` |
+| Palo Alto syslog profile | Created and committed; full policy log forwarding still pending |
 
 ## Grafana Public Access Option
 
