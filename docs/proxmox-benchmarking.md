@@ -37,16 +37,19 @@ The live default map deploys the three HP targets. Dell is documented and kept i
 Prerequisite:
 
 ```text
-local:iso/ubuntu-24.04-server-cloudimg-amd64.img
+nvme-files:iso/noble-server-cloudimg-amd64.img
 ```
 
-The image must exist on each target node. The benchmark stack does not own this image file because repeated temporary test runs should not fight Proxmox files that already exist.
+The image must exist on each HP target node. Do not source benchmark VMs from Proxmox `local` storage on the HP nodes; `local` is backed by the Proxmox boot USB and makes VM import timing meaningless.
+
+`nvme-files` is a small local directory storage on each HP node, backed by the node-local NVMe VG. It stores cloud images/snippets/templates used to create temporary benchmark VMs without touching USB-backed `local`.
 
 Storage model:
 
 | Storage ID | Nodes | Backing storage | Notes |
 | --- | --- | --- | --- |
 | `nvme-local` | `hp1`, `hp2`, `hp3` | Local NVMe LVM-thin pool on each HP node | Same storage ID, but the actual disk is local to the selected node. This is the main HP baseline before Ceph. |
+| `nvme-files` | `hp1`, `hp2`, `hp3` | Local NVMe directory storage on each HP node | Cloud image/snippet source for benchmark VM creation. Not used for VM disks. |
 | `sas-hp3` | `hp3` | HP Smart Array 4.9 TB SAS logical volume, LVM-thin | Useful for comparing hp3 SAS capacity storage against hp3 NVMe local storage. |
 | `nvme-dell` | `dell1` | Dell local NVMe-backed storage | Useful for comparison, but keep Dell results separate because the server is not considered reliable long-term. |
 
@@ -330,3 +333,123 @@ Next checks if the low hp2 memory score repeats:
 2. Re-run with explicit VM NUMA settings and CPU type pinned consistently.
 3. Run a host-level memory benchmark package on each node during a quiet window to separate host memory behavior from VM/NUMA behavior.
 4. Feed the PSU1 input-lost status into alerting so missing redundant power does not become invisible.
+
+### 2026-05-23 storage source fix
+
+Purpose: remove the USB boot disk from the benchmark VM creation path.
+
+Problem found:
+
+- The benchmark docs and Terraform default still pointed at `local:iso/ubuntu-24.04-server-cloudimg-amd64.img`.
+- On the HP nodes, `local` is `/var/lib/vz` on the Proxmox boot USB.
+- That made clone/import timing noisy and could make SAS or NVMe look worse for the wrong reason.
+
+Fix implemented:
+
+- Created `nvme-files` on `hp1`, `hp2`, and `hp3` as local NVMe-backed directory storage.
+- Copied the Noble cloud image to `nvme-files:iso/noble-server-cloudimg-amd64.img` on each HP node.
+- Updated `terraform-proxmox/proxmox-bench` defaults:
+  - `snippets_storage = "nvme-files"`
+  - `ubuntu_cloud_image_file_id = "nvme-files:iso/noble-server-cloudimg-amd64.img"`
+- Updated benchmark cloud-init so the custom `cicustom` snippet includes the workstation and bastion SSH keys directly.
+
+Operational note:
+
+- The three NVMe benchmark VMs recreated quickly from `nvme-files`.
+- `bench-hp3-sas` still took about 22 minutes to import/start because the VM disk itself lives on `sas-hp3`. That is a real storage placement signal, not a USB-source artifact.
+
+### 2026-05-23 after-ilo-power-nvme-01
+
+Purpose: rerun the HP NVMe benchmark after aligning HP iLO power regulator settings to `max`.
+
+Runtime overrides:
+
+```text
+benchmark_cpu_seconds=180
+benchmark_memory_seconds=120
+benchmark_fio_runtime=180
+benchmark_fio_size=8G
+iperf server=bench-hp1
+```
+
+Observed DHCP:
+
+| VM | Node | Storage | IP |
+| --- | --- | --- | --- |
+| `bench-hp1` | `hp1` | `nvme-local` | `10.0.0.45` |
+| `bench-hp2` | `hp2` | `nvme-local` | `10.0.0.44` |
+| `bench-hp3` | `hp3` | `nvme-local` | `10.0.0.43` |
+
+Results:
+
+| Host | Node | Storage | CPU eps | Mem MiB/s | iperf to hp1 Mbit/s | Seq read MiB/s | Seq write MiB/s | 4k rand read IOPS | 4k rand write IOPS | 70/30 read IOPS | 70/30 write IOPS |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench-hp1` | `hp1` | `nvme-local` | 4683 | 3478 | server | 2971 | 825 | 204434 | 162921 | 129737 | 55578 |
+| `bench-hp2` | `hp2` | `nvme-local` | 4241 | 735 | 939 | 1009 | 566 | 190670 | 142801 | 128250 | 54941 |
+| `bench-hp3` | `hp3` | `nvme-local` | 4743 | 3039 | 939 | 837 | 764 | 204148 | 152096 | 131031 | 56137 |
+
+Findings:
+
+- The iLO power-regulator mismatch was not the whole hp2 story. `hp2` still shows unusually low sysbench memory throughput.
+- `hp2` random disk performance is now close to the other HP nodes, so the earlier disk suspicion is less interesting than memory/NUMA/CPU-generation differences.
+- `hp1` still has the strongest sequential NVMe read behavior in this test.
+
+### 2026-05-23 hp3-sas-after-nvme-files-01
+
+Purpose: compare hp3 SAS capacity storage against hp3 NVMe after fixing the image source to `nvme-files`.
+
+Observed DHCP:
+
+| VM | Node | Storage | IP |
+| --- | --- | --- | --- |
+| `bench-hp3-sas` | `hp3` | `sas-hp3` | `10.0.0.46` |
+
+Results:
+
+| Host | Node | Storage | CPU eps | Mem MiB/s | iperf to hp1 Mbit/s | Seq read MiB/s | Seq write MiB/s | 4k rand read IOPS | 4k rand write IOPS | 70/30 read IOPS | 70/30 write IOPS |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench-hp3` | `hp3` | `nvme-local` | 4743 | 3039 | 941 | 837 | 764 | 204148 | 152096 | 131031 | 56137 |
+| `bench-hp3-sas` | `hp3` | `sas-hp3` | 4747 | 3201 | 941 | 1475 | 241 | 6548 | 1280 | 2268 | 974 |
+
+Findings:
+
+- `sas-hp3` sequential read is decent for capacity storage in this run, but write and random IO are far below NVMe.
+- Random 4k write on SAS is roughly two orders of magnitude lower than hp3 NVMe in this VM test.
+- `sas-hp3` is appropriate for media/capacity workloads, but not for latency-sensitive VM disks, databases, or anything that should feel fast.
+- Terraform successfully created the SAS VM into state, but the provider timed out while starting it after the long import. The VM was then started manually and benchmarked cleanly.
+
+### 2026-05-23 iLO thermal check
+
+Purpose: investigate the Grafana panel where `ilo-hp3` `sensor_index=20` in `power-zone` looked much hotter than the other HP servers.
+
+Influx latest readings during the benchmark window:
+
+| Device | Sensor | Location | Celsius |
+| --- | ---: | --- | ---: |
+| `ilo-hp1` | 20 | `power-zone` | 40 |
+| `ilo-hp2` | 20 | `power-zone` | 40 |
+| `ilo-hp3` | 20 | `power-zone` | 40 |
+
+Current hottest sensors:
+
+| Device | Sensor | Location | Celsius |
+| --- | ---: | --- | ---: |
+| `ilo-hp1` | 27 | `disk-backplane` | 55 |
+| `ilo-hp2` | 27 | `disk-backplane` | 58 |
+| `ilo-hp3` | 27 | `disk-backplane` | 52 |
+| `ilo-hp3` | 8 | `system-board` | 50 |
+
+Power draw:
+
+| Device | Active PSU used watts |
+| --- | ---: |
+| `ilo-hp1` | 121 |
+| `ilo-hp2` | 106 |
+| `ilo-hp3` | 162 |
+
+Interpretation:
+
+- `ilo-hp3` sensor 20 is not currently hotter than the same sensor on hp1/hp2.
+- hp3 is drawing more power right now, which is expected while it hosts media/SAS/benchmark work.
+- The hottest reported HP sensors are disk-backplane sensors, with hp2 currently highest at 58C.
+- Add alerting around high disk-backplane temperature and PSU redundancy loss before relying on these systems for heavier storage work.
