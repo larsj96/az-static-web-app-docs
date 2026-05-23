@@ -288,3 +288,45 @@ Notes from this run:
 - `bench-hp3-sas` took much longer to clone/import than the NVMe-backed VMs, which is another practical signal for placement decisions.
 - `bench-hp2` again showed unusually low memory throughput compared with the other VMs. Treat this as something to investigate or rerun before making a hardware conclusion.
 - The first `iperf3` implementation tried parallel clients against one server and failed for some hosts because iperf3 only runs one test at a time. The role now serializes iperf clients.
+
+### 2026-05-23 HP host power/profile inspection
+
+Purpose: follow up on the low `bench-hp2` memory result from `2026-05-22 all-storage-iperf-02`.
+
+Checked from the Frankfurt VPS against `hp1`, `hp2`, and `hp3` over SSH. Linux-visible CPU policy looked sane on all three nodes, but iLO exposed an actual platform difference.
+
+| Host | CPU | Threads | Linux governor | Turbo | BIOS | Memory population/speed | Initial iLO power regulator | Final iLO power regulator |
+| --- | --- | ---: | --- | --- | --- | --- | --- | --- |
+| `hp1` | 2x Xeon E5-2667 v4 | 32 | `performance` | enabled | P89, 2019-10-21 | 12x32G, 2400 MT/s configured | `dynamic` | `max` |
+| `hp2` | 2x Xeon E5-2687W v3 | 40 | `performance` | enabled | P89, 2019-10-21 | 24x32G, 1866 MT/s configured | `dynamic` | `max` |
+| `hp3` | 2x Xeon E5-2667 v4 | 32 | `performance` | enabled | P89, 2018-05-21 | 24x32G, reported 1600 MT/s configured | `max` | `max` |
+
+iLO power readings after alignment:
+
+| Host | Present power | Average power | Max observed | Server max power | PSU status |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `hp1` | 119 W | 118 W | 245 W | 457 W | PSU1 input lost, PSU2 good/in use |
+| `hp2` | 104 W | 102 W | 260 W | 617 W | PSU1 input lost, PSU2 good/in use |
+| `hp3` | 141 W | 144 W | 566 W | 599 W | PSU1 input lost, PSU2 good/in use |
+
+Actions taken:
+
+- Set `hp1` and `hp2` iLO power regulator to `max` so all HP nodes match the fastest observed host profile.
+- Verified all three iLOs respond to SNMPv2 from `monitoring1`.
+- Fixed `hp1` iLO SNMP, which had been restricted to an old source IP. `ilo-hp1`, `ilo-hp2`, and `ilo-hp3` now appear in Influx as iLO devices.
+- Updated Ansible monitoring targets so the iLO dashboard can collect all three HP servers.
+
+Findings:
+
+- Linux-visible CPU governor was already `performance` on all three HP nodes.
+- Intel turbo was enabled on all three nodes: `intel_pstate_no_turbo=0`.
+- No obvious kernel log evidence of CPU throttling, MCE, or corrected/uncorrected memory errors was found in the checked boot logs.
+- `hp2` is not hardware-identical to `hp1`/`hp3`: it has E5-2687W v3 CPUs, 40 threads, and 24 populated DIMMs running at 1866 MT/s.
+- The earlier low sysbench memory result may still be a VM NUMA placement or benchmark artifact, but the iLO power-regulator mismatch was real and has now been removed from the comparison.
+
+Next checks if the low hp2 memory score repeats:
+
+1. Re-run the benchmark after the iLO power-regulator alignment.
+2. Re-run with explicit VM NUMA settings and CPU type pinned consistently.
+3. Run a host-level memory benchmark package on each node during a quiet window to separate host memory behavior from VM/NUMA behavior.
+4. Feed the PSU1 input-lost status into alerting so missing redundant power does not become invisible.
