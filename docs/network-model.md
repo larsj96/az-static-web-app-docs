@@ -205,7 +205,7 @@ The VPS path is useful as an operations hub, but it should not be the only priva
 Live direct design:
 
 ```text
-Palo Alto WAN global IPv6 <-> Fortigate WAN global IPv6
+Palo Alto delegated-prefix loopback IPv6 <-> Fortigate WAN global IPv6
 IKEv2/IPsec route-based tunnel
 Protected IPv4 networks:
   Palo Alto side: 10.1.0.0/16
@@ -250,6 +250,20 @@ Fortigate palo-ipv6 -> nattraversal forced
 
 Without UDP encapsulation, IKE and IPsec SAs came up, but WSL/PC traffic was one-way: Palo allowed `10.1.1.5 -> 10.0.0.0/16` and sent it out `tunnel.20`, but no useful return traffic was decapsulated. After enabling NAT-T, Palo showed `<natt>True</natt>` and real decap counters.
 
+Performance note from `2026-05-24`:
+
+The direct tunnel is functional, but it is not currently a good performance path for Plex or large TCP transfers. WSL-to-VM `iperf3` over the direct tunnel measured around `7-10 Mbit/s` TCP with many retransmits, while UDP at `20 Mbit/s` was mostly clean. The Palo operational view shows the tunnel using:
+
+```text
+outer-if: loopback.12
+localip: 2a0d:3341:bb9c:af01::443
+natt: True
+mtu: 1395
+hw-mode: none
+```
+
+The Palo physical Starlink interface `ethernet1/1` receives IPv4 CGNAT and DHCPv6-PD, but no usable global IPv6 address directly on the interface. Attempts to add a static or inherited delegated IPv6 address to `ethernet1/1` while keeping DHCPv6-PD were rejected by PAN-OS. For now, keep the direct IPv6 tunnel for redundancy and management, but prefer the VPS path or another public-access design for media until a physical-interface IPv6 endpoint or another edge design is proven.
+
 Known-good validation from the Frankfurt VPS on `2026-05-23`:
 
 ```text
@@ -272,7 +286,7 @@ WSL HTTP checks:
 
 Traffic counters stay at zero until real inside traffic crosses the tunnel. Test this from a Palo-side client to a Fortigate-side host, or from a Fortigate-side host to a Palo-side host. Testing from the VPS does not validate the direct tunnel because the VPS is a third path.
 
-Before applying this, verify both firewalls have global IPv6 addresses, not only `fe80::` link-local addresses:
+Before applying this, verify both firewalls have routable global IPv6 endpoint addresses, not only `fe80::` link-local addresses. On the current Palo side the endpoint is on `loopback.12`, not `ethernet1/1`:
 
 ```text
 Palo Alto:
