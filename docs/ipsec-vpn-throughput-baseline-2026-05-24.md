@@ -368,6 +368,31 @@ Retransmits are still high, so BBR is not proof that the direct path is clean. I
 
 Use BBR as the default Linux baseline for media-facing servers and any future VM that sends bulk traffic over Starlink/IPsec.
 
+## Raw File Copy A/B Test
+
+Synthetic `iperf3` proved the direction, but a raw file copy was tested too.
+
+Test method:
+
+```text
+source host: media1 / 10.0.0.39
+client: WSL on workstation
+tool: scp, no compression
+test file: 128 MiB random file
+```
+
+Results:
+
+```text
+BBR download, media1 -> WSL:   128 MiB in 34.36s  = 31.2 Mbit/s
+Cubic download, media1 -> WSL: 128 MiB in 187.11s = 5.7 Mbit/s
+BBR upload, WSL -> media1:     128 MiB in 173.10s = 6.2 Mbit/s
+```
+
+The upload result is expected to remain poor because the sender is WSL/Windows, not the Linux media server. BBR on `media1` primarily helps traffic where `media1` is the TCP sender, which is the Plex streaming direction.
+
+Conclusion: BBR is not just an `iperf3` artifact. It materially improves real SSH/SCP file reads from the media server over the direct IPsec path.
+
 ## 4K readiness delta to close
 
 Target baseline for comfortable 4K streaming over this path:
