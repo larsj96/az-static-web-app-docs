@@ -143,6 +143,7 @@ Terraform test switches were added to `terraform-palo/live/homelab/network-base`
 ```hcl
 starlink_dhcpv6_request_non_temporary_address = true
 starlink_enable_dhcpv6_client                 = false
+enable_infra_inherited_ipv6                   = false
 ```
 
 The first switch requests a DHCPv6 non-temporary address (`IA_NA`) while keeping prefix delegation enabled. A targeted apply and Palo commit succeeded, but `ethernet1/1` still showed only:
@@ -154,20 +155,40 @@ dhcpv6_client: True
 
 So Starlink/PAN-OS did not produce a global IPv6 address on the physical WAN interface through DHCPv6 IA_NA.
 
-The second switch temporarily disables the DHCPv6 client to test pure Starlink WAN SLAAC behavior. Terraform could stage the change, but the Palo commit failed because LAN interfaces inherit addresses from the `starlink-ipv6-pd` prefix pool:
+The second switch temporarily disables the DHCPv6 client to test pure Starlink WAN SLAAC behavior. The first attempt proved that delegated LAN IPv6 has to be removed before the commit can succeed, because LAN interfaces inherit addresses from the `starlink-ipv6-pd` prefix pool:
 
 ```text
 ethernet1/3.10 -> ipv6 -> inherited -> assign-addr -> starlink-ipv6-pd-gua
 prefix-pool 'starlink-ipv6-pd' is not a valid reference
 ```
 
-The DHCPv6-PD config was restored and committed successfully after the failed pure-SLAAC test. Post-restore checks confirmed:
+During the maintenance-window retest, the infra inherited IPv6 toggle was disabled and the separate Palo-to-VPS IPv6 VPN objects were temporarily disabled because that stack used `ethernet1/3.10` as its local IPv6 interface. After that, the pure-SLAAC commit succeeded.
+
+Result after pure SLAAC settled:
+
+```text
+ethernet1/1 IPv4: 100.76.66.178/10
+ethernet1/1 IPv6: fe80::1ecf:82ff:fe6a:3710/64
+physical_wan_global_ipv6: none
+```
+
+So even with DHCPv6-PD and inherited LAN IPv6 removed, the Palo physical Starlink WAN did **not** get a global IPv6 address. That closes this branch: rebuilding the direct Fortigate tunnel on the physical Palo WAN is not possible with the current PA-510/Starlink behavior.
+
+After the test, normal DHCPv6-PD mode and inherited infra IPv6 were restored in two steps and committed. The Palo-to-VPS IPv6 VPN objects were re-enabled. Post-restore checks confirmed:
 
 - `10.0.0.37` reachable from WSL
 - `10.0.0.33` reachable from WSL
+- `10.0.0.162:8006` returned HTTP 200 from WSL
 - VPS still had both Palo and Fortigate IPsec SAs established
 
-Conclusion: with the current Palo IPv6 design, the physical Starlink interface cannot be used as the direct IPv6 IPsec endpoint without first redesigning delegated IPv6 usage on the Palo side.
+Backup/config snapshots for this test were stored on the VPS:
+
+```text
+/root/homelab-backups/palo-slaac-test-20260524-010531
+/root/homelab-backups/palo-slaac-test-20260524-011539
+```
+
+Conclusion: with the current Palo IPv6 design, the physical Starlink interface cannot be used as the direct IPv6 IPsec endpoint. The direct tunnel can remain functional on the delegated-prefix loopback endpoint, but this test rules out the simple "move it to `ethernet1/1`" fix.
 
 ## Interpretation
 
@@ -194,7 +215,7 @@ Target baseline for comfortable 4K streaming over this path:
 2. Prefer the Frankfurt VPS path or Cloudflare/Plex-native access for media until the direct tunnel is fixed.
 3. Compare with a native Linux host, not WSL, to remove WSL path variance.
 4. Run UDP at higher rates (`iperf3 -u -b 50M`, then `100M`) while watching Fortigate/Palo counters.
-5. Investigate whether Starlink/PAN-OS can provide a physical-interface global IPv6 without losing DHCPv6-PD. If not, a different edge design may be needed for a fast direct tunnel.
+5. Treat physical-WAN IPv6 on the PA-510 as blocked unless Palo support identifies a supported Starlink mode that provides a physical-interface GUA.
 6. If keeping the loopback endpoint, test whether Palo route/policy/PBF can force return traffic consistently out `ethernet1/1`, though current symptoms suggest PAN-OS loopback endpoint handling may remain the bottleneck.
 7. Keep the VPS fallback path documented and tested because it currently outperforms the direct Starlink-to-Starlink TCP path.
 
@@ -205,8 +226,8 @@ The likely durable fix is one of these, in this order:
 1. Put a small IPv6-capable edge device in front of Palo (OpenWrt, MikroTik, OPNsense, or Linux). Let it consume Starlink WAN SLAAC/DHCPv6-PD correctly, then route a usable IPv6 prefix or terminate the fast site-to-site tunnel there.
 2. Move the high-performance direct tunnel endpoint to a Linux/OPNsense/WireGuard edge VM/device that handles Starlink IPv6 natively, then route inside networks through Palo/Fortigate policy.
 3. Keep Palo-to-Fortigate IPv6 IPsec as management/redundancy and make the Frankfurt VPS path or application-specific public access the primary path for media until the direct path is redesigned.
-4. During a maintenance window, remove Palo inherited IPv6 LAN addressing temporarily and retest pure SLAAC on `ethernet1/1`. If the physical interface gets a GUA, rebuild the direct IPsec endpoint on the physical WAN.
-5. Ask Palo Alto support whether PAN-OS on PA-510 can hold a SLAAC global WAN address and DHCPv6-PD at the same time on Starlink. Current testing did not achieve that.
+4. Ask Palo Alto support whether PAN-OS on PA-510 can hold a SLAAC global WAN address and DHCPv6-PD at the same time on Starlink. Current testing did not achieve that, even when DHCPv6-PD was disabled temporarily.
+5. Avoid spending more time on a physical-WAN rebuild unless `ethernet1/1` can be shown to hold a global IPv6 address.
 
 ## Cleanup executed
 
