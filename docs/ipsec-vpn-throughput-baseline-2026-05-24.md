@@ -334,6 +334,39 @@ VM -> PC P4 TCP reverse: about 9.2 Mbit/s receiver, 84 retransmits
 
 Result: disabling Fortigate NPU offload did not help and made forward throughput worse. `npu-offload` was restored to `enable`.
 
+## Linux BBR A/B Test
+
+Because Plex traffic is mostly server-to-client, the important direction is Linux VM sending to the Palo-side client. Ubuntu defaulted to Cubic:
+
+```text
+net.ipv4.tcp_congestion_control = cubic
+net.core.default_qdisc = fq_codel
+```
+
+On `10.0.0.37`, enabling BBR at runtime changed reverse TCP throughput from about `11.3 Mbit/s` to about `66.9 Mbit/s`:
+
+```text
+before: cubic + fq_codel, VM -> PC P4 TCP reverse about 11.3 Mbit/s
+after:  bbr + fq,        VM -> PC P4 TCP reverse about 66.9 Mbit/s
+```
+
+The actual Plex/media VM `10.0.0.39` showed the same pattern:
+
+```text
+before: cubic + fq_codel, media1 -> PC P4 TCP reverse about 8.5 Mbit/s
+after:  bbr + fq,        media1 -> PC P4 TCP reverse about 95.8 Mbit/s in the best 30s run
+verify: bbr + fq,        media1 -> PC P4 TCP reverse about 43.7 Mbit/s in a later 20s run
+```
+
+Retransmits are still high, so BBR is not proof that the direct path is clean. It is, however, the first change that makes the direct tunnel potentially useful for Plex streaming. `media1` now has BBR persisted by Ansible through the `tcp_tuning` role:
+
+```text
+/etc/modules-load.d/tcp_bbr.conf
+/etc/sysctl.d/90-homelab-tcp.conf
+```
+
+Use BBR as the default Linux baseline for media-facing servers and any future VM that sends bulk traffic over Starlink/IPsec.
+
 ## 4K readiness delta to close
 
 Target baseline for comfortable 4K streaming over this path:
@@ -348,21 +381,23 @@ Target baseline for comfortable 4K streaming over this path:
 2. Keep the Frankfurt VPS transit selectors/routes available as secondary fallback and as a control benchmark.
 3. Capture the outer WAN path on Palo and Fortigate during a direct `iperf3` run to confirm whether UDP/4500 packets are being lost/reordered before or after each firewall.
 4. Leave Fortigate `npu-offload=enable`; the `disable` A/B test was worse.
-5. Run UDP at higher rates (`iperf3 -u -b 50M`, then `100M`) while watching Fortigate/Palo counters.
-6. Treat physical-WAN IPv6 on the PA-510 as blocked unless Palo support identifies a supported Starlink mode that provides a physical-interface GUA.
-7. Prefer Cloudflare/Plex-native public access or VPS fallback only while direct site-to-site performance is being repaired.
+5. Keep BBR enabled on media-serving Linux hosts; it materially improves server-to-client throughput over the direct tunnel.
+6. Run UDP at higher rates (`iperf3 -u -b 50M`, then `100M`) while watching Fortigate/Palo counters.
+7. Treat physical-WAN IPv6 on the PA-510 as blocked unless Palo support identifies a supported Starlink mode that provides a physical-interface GUA.
+8. Prefer Cloudflare/Plex-native public access or VPS fallback only while direct site-to-site performance is being repaired.
 
 ## Real solution paths
 
 The likely durable fix is one of these, in this order:
 
 1. Fix the direct Starlink-to-Starlink tunnel by proving where the SACK/loss/reordering starts, then tune or bypass that behavior.
-2. Continue direct tunnel MTU/MSS tests as controlled A/B changes, with route preference restored after each test.
-3. Put a small IPv6-capable edge device in front of Palo (OpenWrt, MikroTik, OPNsense, or Linux) only if PAN-OS/Starlink cannot provide a clean direct data plane. Let it consume Starlink WAN SLAAC/DHCPv6-PD correctly, then route a usable IPv6 prefix or terminate the fast site-to-site tunnel there.
-4. Move the high-performance direct tunnel endpoint to a Linux/OPNsense/WireGuard edge VM/device that handles Starlink IPv6 natively, then route inside networks through Palo/Fortigate policy.
-5. Keep the Frankfurt VPS transit path as secondary fallback, remote operations, and benchmark/control path.
-6. Ask Palo Alto support whether PAN-OS on PA-510 can hold a SLAAC global WAN address and DHCPv6-PD at the same time on Starlink. Current testing did not achieve that, even when DHCPv6-PD was disabled temporarily.
-7. Avoid spending more time on a physical-WAN rebuild unless `ethernet1/1` can be shown to hold a global IPv6 address.
+2. Standardize BBR/fq on Linux servers that send bulk data over the tunnel, starting with Plex/media.
+3. Continue direct tunnel MTU/MSS tests as controlled A/B changes, with route preference restored after each test.
+4. Put a small IPv6-capable edge device in front of Palo (OpenWrt, MikroTik, OPNsense, or Linux) only if PAN-OS/Starlink cannot provide a clean direct data plane. Let it consume Starlink WAN SLAAC/DHCPv6-PD correctly, then route a usable IPv6 prefix or terminate the fast site-to-site tunnel there.
+5. Move the high-performance direct tunnel endpoint to a Linux/OPNsense/WireGuard edge VM/device that handles Starlink IPv6 natively, then route inside networks through Palo/Fortigate policy.
+6. Keep the Frankfurt VPS transit path as secondary fallback, remote operations, and benchmark/control path.
+7. Ask Palo Alto support whether PAN-OS on PA-510 can hold a SLAAC global WAN address and DHCPv6-PD at the same time on Starlink. Current testing did not achieve that, even when DHCPv6-PD was disabled temporarily.
+8. Avoid spending more time on a physical-WAN rebuild unless `ethernet1/1` can be shown to hold a global IPv6 address.
 
 ## Cleanup executed
 
