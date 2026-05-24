@@ -306,7 +306,7 @@ npu-offload enable:  PC -> VM about 15.2 Mbit/s, VM -> PC about 8.9 Mbit/s
 npu-offload disable: PC -> VM about 6.8 Mbit/s,  VM -> PC about 9.2 Mbit/s
 ```
 
-Linux BBR is the first useful mitigation for the Plex/media direction. On `media1`/`plex1`, VM-to-PC throughput improved from about `8.5 Mbit/s` with Cubic to `95.8 Mbit/s` in the best BBR test, with a later verification run at `43.7 Mbit/s`.
+Linux BBR is the first useful mitigation for the Plex/media direction. On `media1`/`plex1`, VM-to-PC throughput improved from about `8.5 Mbit/s` with Cubic to `95.8 Mbit/s` in the best BBR test. A later native Windows verification from `10.1.1.5` measured about `105 Mbit/s` over 45 seconds.
 
 `media1` is now persisted through Ansible:
 

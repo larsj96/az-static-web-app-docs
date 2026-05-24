@@ -356,6 +356,7 @@ The actual Plex/media VM `10.0.0.39` showed the same pattern:
 before: cubic + fq_codel, media1 -> PC P4 TCP reverse about 8.5 Mbit/s
 after:  bbr + fq,        media1 -> PC P4 TCP reverse about 95.8 Mbit/s in the best 30s run
 verify: bbr + fq,        media1 -> PC P4 TCP reverse about 43.7 Mbit/s in a later 20s run
+native Windows verify:   media1 -> PC P4 TCP reverse about 105 Mbit/s over 45s
 ```
 
 Retransmits are still high, so BBR is not proof that the direct path is clean. It is, however, the first change that makes the direct tunnel potentially useful for Plex streaming. `media1` now has BBR persisted by Ansible through the `tcp_tuning` role:
