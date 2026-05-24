@@ -217,7 +217,8 @@ IPv6 is the tunnel transport. The protected lab LANs stay IPv4 for now, which ke
 Current live endpoints:
 
 ```text
-Palo Alto: gp.lanilsen.com / 2a0d:3341:bb9c:af01::443
+Palo Alto direct tunnel endpoint: ethernet1/3.10 / 2a0d:3341:bb9c:af00:1ecf:82ff:fe6a:3712
+Palo Alto GlobalProtect endpoint: gp.lanilsen.com / loopback.12 / 2a0d:3341:bb9c:af01::443
 Fortigate: port9 / 2a0d:3341:bb00:6320:a5b:eff:feca:b2e9
 Palo tunnel interface: tunnel.20
 Palo VPN zone: vpn-fortigate
@@ -230,7 +231,8 @@ The Palo Alto route preference is:
 ```text
 10.0.0.0/16 -> tunnel.20 direct Fortigate IPv6 IPsec, metric 5
 10.0.0.0/16 -> tunnel.10 Frankfurt VPS fallback, metric 50
-10.8.0.0/24 -> tunnel.10 Frankfurt VPS hub, metric 10
+10.8.0.0/24 -> tunnel.11 Frankfurt VPS IPv6 transport, metric 5
+10.8.0.0/24 -> tunnel.10 Frankfurt VPS IPv4 transport fallback, metric 50
 ```
 
 The Fortigate route preference is:
@@ -252,17 +254,57 @@ Without UDP encapsulation, IKE and IPsec SAs came up, but WSL/PC traffic was one
 
 Performance note from `2026-05-24`:
 
-The direct tunnel is functional, but it is not currently a good performance path for Plex or large TCP transfers. WSL-to-VM `iperf3` over the direct tunnel measured around `7-10 Mbit/s` TCP with many retransmits, while UDP at `20 Mbit/s` was mostly clean. The Palo operational view shows the tunnel using:
+The direct tunnel is functional, but it is not currently a good performance path for Plex or large TCP transfers. WSL-to-VM `iperf3` over the direct tunnel measured around `7-10 Mbit/s` TCP with many retransmits, while UDP at `20 Mbit/s` was mostly clean.
+
+The tunnel was moved from the GlobalProtect loopback endpoint to the delegated GUA on `ethernet1/3.10` to match the working Palo-to-VPS IPv6 pattern. The Palo operational view now shows:
 
 ```text
-outer-if: loopback.12
-localip: 2a0d:3341:bb9c:af01::443
+outer-if: ethernet1/3.10
+localip: 2a0d:3341:bb9c:af00:1ecf:82ff:fe6a:3712
 natt: True
 mtu: 1395
 hw-mode: none
 ```
 
-The Palo physical Starlink interface `ethernet1/1` receives IPv4 CGNAT and DHCPv6-PD, but no usable global IPv6 address directly on the interface. Attempts to add a static or inherited delegated IPv6 address to `ethernet1/1` while keeping DHCPv6-PD were rejected by PAN-OS. For now, keep the direct IPv6 tunnel for redundancy and management, but prefer the VPS path or another public-access design for media until a physical-interface IPv6 endpoint or another edge design is proven.
+Native Windows testing from the real `10.1.1.5` client still only reached about `9 Mbit/s` forward and `12 Mbit/s` reverse to `10.0.0.37`. Smaller client-side MSS values made throughput worse, not better.
+
+Control tests were much better to the Frankfurt VPS public IP:
+
+```text
+Palo-side Windows -> VPS public: about 31 Mbit/s
+VPS public -> Palo-side Windows: about 72 Mbit/s
+Fortigate-side 10.0.0.37 -> VPS public: about 34 Mbit/s
+VPS public -> Fortigate-side 10.0.0.37: about 45 Mbit/s
+```
+
+The Palo physical Starlink interface `ethernet1/1` receives IPv4 CGNAT and DHCPv6-PD, but no usable global IPv6 address directly on the interface. Attempts to add a static or inherited delegated IPv6 address to `ethernet1/1` while keeping DHCPv6-PD were rejected by PAN-OS.
+
+The intended design is still direct-first:
+
+```text
+Primary:  Palo <-> Fortigate direct IPv6 IPsec
+Fallback: Palo <-> VPS <-> Fortigate
+```
+
+The VPS transit path exists as secondary resiliency and as a control benchmark. It should not silently become the normal path unless the direct tunnel is down or intentionally disabled for maintenance.
+
+Packet captures on `2026-05-24` showed the direct path problem as TCP holes/reordering, not local VM or Proxmox slowness:
+
+```text
+PC 10.1.1.5 -> VM 10.0.0.37 direct iperf3: about 11.2 Mbit/s, 731 SACK blocks observed
+VM 10.0.0.37 -> PC 10.1.1.5 direct iperf3: about 7.3 Mbit/s, 1551 SACK blocks observed
+VM 10.0.0.37 -> VM 10.0.0.35 local iperf3: about 22-23 Gbit/s, 0 retransmits
+VM 10.0.0.37 -> Fortigate 10.0.0.33 ping: 0% loss, about 0.277 ms average
+```
+
+Palo reported no IPsec auth/decrypt/replay errors and MSS `1280` was observed on the TCP SYN, so the next troubleshooting focus is the direct encrypted Starlink path and Fortigate IPsec/offload behavior, not WSL or Proxmox storage/networking.
+
+Fortigate `palo-ipv6` NPU offload was tested as an A/B change on `2026-05-24`. Disabling it made PC-to-VM throughput worse, so it was restored:
+
+```text
+npu-offload enable:  PC -> VM about 15.2 Mbit/s, VM -> PC about 8.9 Mbit/s
+npu-offload disable: PC -> VM about 6.8 Mbit/s,  VM -> PC about 9.2 Mbit/s
+```
 
 Known-good validation from the Frankfurt VPS on `2026-05-23`:
 
@@ -310,7 +352,7 @@ The Palo Alto stack creates `tunnel.20`, zone `vpn-fortigate`, IKE/IPsec profile
 
 The Fortigate stack creates a route-based IPsec interface, phase2 selectors, IPv4 address objects, static route to `10.1.0.0/16`, and bidirectional policies.
 
-Keep the existing VPS VPN as a backup and remote operations path. The direct IPv6 VPN is the intended low-latency site-to-site path, with the VPS path retained as fallback.
+Keep the existing VPS VPN as a backup and remote operations path. The direct IPv6 VPN is the intended low-latency site-to-site path, with the VPS path retained as fallback and control benchmark.
 
 Provider limitation:
 
