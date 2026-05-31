@@ -69,6 +69,7 @@ cs2-map redline
 cs2-map rats
 cs2-map freemirage
 cs2-map dusthr
+cs2-map hoejhus
 ```
 
 Current managed Workshop maps:
@@ -79,6 +80,7 @@ Current managed Workshop maps:
 | `rats` | `3072959547` | `de_rats_1337` |
 | `freemirage` | `3298850698` | `Free Mirage` |
 | `dusthr` | `3127729110` | `de_dust_hr` |
+| `hoejhus` | `3439554221` | `hoejhus9` |
 
 Current managed local/official maps:
 
