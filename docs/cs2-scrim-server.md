@@ -12,6 +12,7 @@ The VPS-hosted server is the preferred public scrim location because it avoids a
 | --- | --- |
 | Host | `vpshub` |
 | Public IP | `72.61.95.150` |
+| Game DNS | `game.cs2.lanilsen.com` |
 | Stack path | `/opt/homelab-ops/game-servers/cs2-test` |
 | Container | `cs2-test` |
 | Game port | `27016/udp` |
@@ -21,6 +22,46 @@ The VPS-hosted server is the preferred public scrim location because it avoids a
 | Plugins | CounterStrikeSharp, MatchZy, ChangeLevelChat |
 
 The older `27015` test server was removed. Treat `27016` as the active scrim/practice server.
+
+Players should connect to:
+
+```text
+connect game.cs2.lanilsen.com:27016
+```
+
+`game.cs2.lanilsen.com` is intentionally DNS-only in Cloudflare. Do not proxy the game endpoint; Cloudflare's orange-cloud proxy is for HTTP(S), not CS2 UDP gameplay.
+
+## Get5 Web Panel
+
+Get5/G5V is hosted on-prem on `docker1` and published through the existing homelab Cloudflare Tunnel:
+
+| Item | Value |
+| --- | --- |
+| Public URL | `https://cs2.lanilsen.com` |
+| Access policy | Cloudflare Access one-time PIN |
+| Allowed users | `larsj96@gmail.com`, `mikael.fjell@hotmail.com` |
+| Origin host | `docker1` / `10.0.0.37` |
+| Origin URL | `http://10.0.0.37:33080` |
+| Stack path | `/opt/get5-panel` |
+| Containers | `get5-nginx`, `get5-web`, `get5-api`, `get5db`, `get5-redis` |
+
+This split is deliberate:
+
+- `cs2.lanilsen.com` is the protected HTTPS web panel.
+- `game.cs2.lanilsen.com:27016` is the direct game server endpoint.
+
+Do not collapse these into one hostname unless the Cloudflare design changes, because the web panel must be proxied and Access-protected while the game port must remain direct.
+
+Operational checks from `docker1`:
+
+```bash
+cd /opt/get5-panel
+docker compose ps
+curl -I http://127.0.0.1:33080/
+curl -I http://127.0.0.1:33080/api-docs/
+```
+
+The stack currently permits local logins. A Steam Web API key can be added later for richer Steam lookups; store it in Vault and render it into `/opt/get5-panel/.env` rather than committing it to Git.
 
 ## Repeatable Configuration
 
