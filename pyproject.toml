@@ -16,7 +16,7 @@ mkdocs-mermaid2-plugin = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
 isort = "^5.10.1"
-black = "^23.9.1"
+black = "^24.4.2"
 mypy = "^1.4.0"
 flake8 = "^6.1.0"
 
